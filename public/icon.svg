@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e3a8a" />
+      <stop offset="50%" stop-color="#2563eb" />
+      <stop offset="100%" stop-color="#0284c7" />
+    </linearGradient>
+    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24" />
+      <stop offset="100%" stop-color="#f59e0b" />
+    </linearGradient>
+  </defs>
+  <!-- Background with rounded corners (safe zone padding) -->
+  <rect width="512" height="512" rx="108" fill="url(#grad1)" />
+  <!-- Inner circular badge -->
+  <circle cx="256" cy="256" r="190" fill="#ffffff" fill-opacity="0.08" stroke="#60a5fa" stroke-width="6" stroke-dasharray="8 8" />
+  
+  <!-- Graduation Cap / Toga Emblem -->
+  <polygon points="256,120 390,185 256,245 122,185" fill="url(#gold)" />
+  <path d="M170,215 L170,290 C170,335 256,365 256,365 C256,365 342,335 342,290 L342,215 L256,255 Z" fill="#ffffff" />
+  <!-- Tassel -->
+  <path d="M380,195 L395,270 L385,272 L370,197 Z" fill="#f59e0b" />
+  <circle cx="390" cy="275" r="8" fill="#d97706" />
+
+  <!-- CBT Checkmark & Digital Circuit badge -->
+  <circle cx="256" cy="290" r="38" fill="#1e3a8a" />
+  <path d="M242,290 L252,300 L272,280" fill="none" stroke="#38bdf8" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+
+  <!-- Text Accent -->
+  <text x="256" y="420" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="34" font-weight="900" fill="#ffffff" letter-spacing="4">TKA SMK</text>
+  <text x="256" y="448" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="16" font-weight="600" fill="#93c5fd" letter-spacing="2">SMKN 1 SONGGOM</text>
+</svg>

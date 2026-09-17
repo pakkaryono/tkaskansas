@@ -1,0 +1,34 @@
+{
+  "id": "/",
+  "name": "TKA SMKN 1 SONGGOM - Tes Kemampuan Akademik",
+  "short_name": "TKA SMKN 1",
+  "description": "Aplikasi CBT Ujian Tes Kemampuan Akademik (TKA) SMKN 1 Songgom",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0f172a",
+  "theme_color": "#1e3a8a",
+  "lang": "id",
+  "categories": ["education", "productivity"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

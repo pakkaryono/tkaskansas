@@ -1,0 +1,6 @@
+{
+  "name": "TKA SMKN 1 SONGGOM - Tes Kemampuan Akademik",
+  "description": "Aplikasi web Tes Kemampuan Akademik (TKA) SMKN 1 Songgom dengan manajemen Guru, Siswa, Bank Soal 4 tipe, Ujian Online, dan Laporan Hasil berbasis Supabase.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

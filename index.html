@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+    <title>TKA SMKN 1 SONGGOM - Tes Kemampuan Akademik</title>
+    <meta name="description" content="Aplikasi web Tes Kemampuan Akademik (TKA) SMKN 1 Songgom dengan manajemen Guru, Siswa, Bank Soal 4 tipe, Ujian Online, dan Laporan Hasil berbasis Supabase." />
+    <meta name="keywords" content="TKA, SMK, SMKN 1 Songgom, Tes Kemampuan Akademik, CBT, Ujian Online, Bank Soal" />
+    <meta name="author" content="Tim IT SMKN 1 Songgom" />
+
+    <!-- Favicon & PWA Icons -->
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="apple-touch-icon" href="/icon.svg" />
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- Mobile & PWA Meta -->
+    <meta name="theme-color" content="#1e3a8a" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="TKA SMKN 1" />
+
+    <!-- OpenGraph Social Cards -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="TKA SMKN 1 Songgom" />
+    <meta property="og:title" content="TKA SMKN 1 SONGGOM - Tes Kemampuan Akademik" />
+    <meta property="og:description" content="Aplikasi web Tes Kemampuan Akademik (TKA) SMKN 1 Songgom dengan manajemen Guru, Siswa, Bank Soal 4 tipe, Ujian Online, dan Laporan Hasil berbasis Supabase." />
+    <meta property="og:image" content="/icon.svg" />
+
+    <!-- Twitter / X Cards -->
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="TKA SMKN 1 SONGGOM - Tes Kemampuan Akademik" />
+    <meta name="twitter:description" content="Aplikasi web Tes Kemampuan Akademik (TKA) SMKN 1 Songgom dengan manajemen Guru, Siswa, Bank Soal 4 tipe, Ujian Online, dan Laporan Hasil berbasis Supabase." />
+    <meta name="twitter:image" content="/icon.svg" />
+
+    <!-- Schema.org JSON-LD Structured Data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "TKA SMKN 1 SONGGOM",
+      "alternateName": "Tes Kemampuan Akademik SMKN 1 Songgom",
+      "applicationCategory": "EducationalApplication",
+      "operatingSystem": "All",
+      "description": "Sistem Computer Based Test (CBT) Tes Kemampuan Akademik SMKN 1 Songgom dengan bank soal 4 tipe, ujian online berwaktu, dan laporan otomatis.",
+      "inLanguage": "id",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "IDR"
+      }
+    }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // Registrasi Service Worker PWA secara aman
+      if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch((err) => {
+            console.debug('ServiceWorker registration skipped:', err);
+          });
+        });
+      }
+    </script>
+  </body>
+</html>
+
