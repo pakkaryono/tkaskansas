@@ -53,6 +53,7 @@ export interface Subject {
   code: string;
   name: string;
   description?: string;
+  category?: string;
   status: 'active' | 'inactive';
   created_at?: string;
   updated_at?: string;

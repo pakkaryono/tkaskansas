@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 import type { UserProfile, UserRole } from '../types';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://mltysivggdshktbsrvtp.supabase.co';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1sdHlzaXZnZ2RzaGt0YnNydnRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkzNjUyMDQsImV4cCI6MjEwNDk0MTIwNH0.42l9bZKjwIuKt00PuGWHJMp842qwBbEygv5jJOBFOrI';
 
 export const isSupabaseConfigured = Boolean(
   supabaseUrl &&
@@ -11,10 +11,10 @@ export const isSupabaseConfigured = Boolean(
   supabaseAnonKey !== 'your-anon-key-here'
 );
 
-// Inisialisasi Supabase client (jika belum diset, berikan dummy fallback agar tidak crash saat import)
+// Inisialisasi Supabase client
 export const supabase = createClient(
-  isSupabaseConfigured ? supabaseUrl : 'https://placeholder.supabase.co',
-  isSupabaseConfigured ? supabaseAnonKey : 'placeholder-key',
+  supabaseUrl,
+  supabaseAnonKey,
   {
     auth: {
       persistSession: true,
@@ -24,15 +24,15 @@ export const supabase = createClient(
   }
 );
 
-// AKUN SEED / DEMO UNTUK PENGUJIAN INSTAN FASE 1
+// AKUN SEED / DEMO UNTUK PENGUJIAN INSTAN TKA
 export const DEMO_USERS: Record<UserRole, { email: string; password: string; profile: UserProfile }> = {
   admin: {
     email: 'admin@smk.id',
     password: 'password123',
     profile: {
-      id: 'demo-admin-uuid-001',
+      id: 'd1111111-1111-1111-1111-111111111111',
       email: 'admin@smk.id',
-      full_name: 'Drs. H. Mulyono, M.Pd (Administrator)',
+      full_name: 'M. Karyono, S.Kom. (Admin)',
       role: 'admin',
       phone_number: '0812-3456-7890',
       status: 'active',
@@ -43,13 +43,13 @@ export const DEMO_USERS: Record<UserRole, { email: string; password: string; pro
     email: 'guru@smk.id',
     password: 'password123',
     profile: {
-      id: 'demo-guru-uuid-002',
+      id: 'd2222222-2222-2222-2222-222222222222',
       email: 'guru@smk.id',
-      full_name: 'Siti Aminah, S.Kom, Gr.',
+      full_name: 'Siti Aminah, S.Kom., Gr.',
       role: 'guru',
       nip: '198803152014022003',
       phone_number: '0857-1122-3344',
-      subjects_taught: ['Dasar-Dasar Kejuruan TJKT', 'Pemrograman Web & Perangkat Bergerak'],
+      subjects_taught: ['Administrasi Infrastruktur Jaringan', 'Dasar-Dasar Kejuruan TJKT'],
       status: 'active',
       created_at: '2026-09-02T08:00:00Z',
     },
@@ -58,7 +58,7 @@ export const DEMO_USERS: Record<UserRole, { email: string; password: string; pro
     email: 'siswa@smk.id',
     password: 'password123',
     profile: {
-      id: 'demo-siswa-uuid-003',
+      id: 'e1111111-1111-1111-1111-111111111111',
       email: 'siswa@smk.id',
       full_name: 'Muhammad Rizky Ramadhan',
       role: 'siswa',

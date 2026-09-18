@@ -7,6 +7,7 @@ import {
   QuestionFilterParams
 } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { generateUUID } from '../lib/utils';
 import { useMasterData } from './MasterDataContext';
 import { GENERATED_MATH_QUESTIONS_50 } from '../data/mathQuestionsSeed';
 import { ALL_SIMULATION_QUESTIONS } from '../data/simulationSeed';
@@ -351,7 +352,7 @@ export const QuestionBankProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   // Tambah Soal
   const addQuestion = async (data: Omit<Question, 'id' | 'created_at' | 'updated_at'>): Promise<Question> => {
-    const newId = `q-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+    const newId = generateUUID();
     const now = new Date().toISOString();
 
     const created: Question = {
@@ -361,21 +362,21 @@ export const QuestionBankProvider: React.FC<{ children: React.ReactNode }> = ({ 
       updated_at: now,
       options: data.options?.map((opt, idx) => ({
         ...opt,
-        id: opt.id || `opt-${Date.now()}-${idx}`,
+        id: opt.id || generateUUID(),
         question_id: newId,
         order_num: idx + 1,
       })),
       essay_answer: data.essay_answer
         ? {
             ...data.essay_answer,
-            id: data.essay_answer.id || `ans-${Date.now()}`,
+            id: data.essay_answer.id || generateUUID(),
             question_id: newId,
             created_at: now,
           }
         : undefined,
       matching_pairs: data.matching_pairs?.map((pair, idx) => ({
         ...pair,
-        id: pair.id || `pair-${Date.now()}-${idx}`,
+        id: pair.id || generateUUID(),
         question_id: newId,
         order_num: idx + 1,
       })),
@@ -549,7 +550,7 @@ export const QuestionBankProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const target = questions.find((q) => q.id === id);
     if (!target) throw new Error('Soal yang akan diduplikasi tidak ditemukan.');
 
-    const newId = `q-copy-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const newId = generateUUID();
     const randomSuffix = Math.floor(100 + Math.random() * 900);
     const newCode = `${target.code}-SALINAN-${randomSuffix}`;
 
@@ -560,21 +561,21 @@ export const QuestionBankProvider: React.FC<{ children: React.ReactNode }> = ({ 
       status: 'draft', // Set default draf setelah duplikasi agar aman
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      options: target.options?.map((opt, idx) => ({
+      options: target.options?.map((opt) => ({
         ...opt,
-        id: `opt-${newId}-${idx}`,
+        id: generateUUID(),
         question_id: newId,
       })),
       essay_answer: target.essay_answer
         ? {
             ...target.essay_answer,
-            id: `ans-${newId}`,
+            id: generateUUID(),
             question_id: newId,
           }
         : undefined,
-      matching_pairs: target.matching_pairs?.map((m, idx) => ({
+      matching_pairs: target.matching_pairs?.map((m) => ({
         ...m,
-        id: `match-${newId}-${idx}`,
+        id: generateUUID(),
         question_id: newId,
       })),
     };
@@ -674,7 +675,7 @@ export const QuestionBankProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const newQuestionsToAdd: Question[] = [];
 
     for (const item of dataList) {
-      const newId = `q-imp-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      const newId = generateUUID();
       const questionObj: Question = {
         id: newId,
         code: item.code || `SOAL-IMP-${Math.floor(1000 + Math.random() * 9000)}`,

@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { X, Copy, Check, Database, Key, Terminal, ExternalLink, ShieldCheck } from 'lucide-react';
+import { X, Copy, Check, Database, Key, Terminal, ExternalLink, ShieldCheck, Wrench } from 'lucide-react';
 import {
   SUPABASE_PHASE_1_SQL,
   SUPABASE_PHASE_2_SQL,
   SUPABASE_PHASE_3_SQL,
   SUPABASE_PHASE_4_SQL,
   SUPABASE_PHASE_5_SQL,
+  SUPABASE_SEED_DATA_SQL,
+  SUPABASE_QUICK_FIX_SQL,
   SUPABASE_ALL_MIGRATIONS_SQL,
 } from '../../lib/supabaseSchema';
 import { isSupabaseConfigured } from '../../lib/supabase';
@@ -18,12 +20,14 @@ interface SupabaseGuideModalProps {
 export const SupabaseGuideModal: React.FC<SupabaseGuideModalProps> = ({ isOpen, onClose }) => {
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<'panduan' | 'sql'>('panduan');
-  const [selectedPhase, setSelectedPhase] = useState<'all' | '1' | '2' | '3' | '4' | '5'>('all');
+  const [selectedPhase, setSelectedPhase] = useState<'all' | 'fix' | 'seed' | '1' | '2' | '3' | '4' | '5'>('all');
 
   if (!isOpen) return null;
 
   const getSQLForPhase = () => {
     switch (selectedPhase) {
+      case 'fix': return SUPABASE_QUICK_FIX_SQL;
+      case 'seed': return SUPABASE_SEED_DATA_SQL;
       case '1': return SUPABASE_PHASE_1_SQL;
       case '2': return SUPABASE_PHASE_2_SQL;
       case '3': return SUPABASE_PHASE_3_SQL;
@@ -111,6 +115,14 @@ export const SupabaseGuideModal: React.FC<SupabaseGuideModalProps> = ({ isOpen, 
         <div className="p-6 overflow-y-auto flex-1 text-slate-700 text-sm space-y-4">
           {activeTab === 'panduan' ? (
             <div className="space-y-4">
+              <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-3">
+                <Wrench className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <div className="text-xs sm:text-sm text-amber-900 leading-relaxed">
+                  <strong className="font-semibold block mb-0.5 text-amber-950">Mengalami error: column "status" does not exist (Error 42703)?</strong>
+                  Jika Anda melihat pesan error tersebut, buka tab <strong>Skrip SQL Lengkap</strong> lalu klik tombol <strong>🛠️ Perbaikan Kolom (Fix Error 42703)</strong> atau jalankan <strong>Master Lengkap + Seed</strong>. Skrip ini otomatis menambahkan kolom yang kurang tanpa menghapus data yang sudah ada.
+                </div>
+              </div>
+
               <div className="p-4 rounded-xl bg-blue-50 border border-blue-100 flex items-start gap-3">
                 <ShieldCheck className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
                 <div className="text-xs sm:text-sm text-blue-900 leading-relaxed">
@@ -180,7 +192,23 @@ export const SupabaseGuideModal: React.FC<SupabaseGuideModalProps> = ({ isOpen, 
                       selectedPhase === 'all' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
-                    Master Semua Fase (1-5)
+                    Master Lengkap + Seed
+                  </button>
+                  <button
+                    onClick={() => setSelectedPhase('fix')}
+                    className={`px-2.5 py-1 rounded-lg transition-colors ${
+                      selectedPhase === 'fix' ? 'bg-amber-600 text-white shadow-xs' : 'text-amber-700 hover:bg-amber-100'
+                    }`}
+                  >
+                    🛠️ Perbaikan Kolom (Fix Error 42703)
+                  </button>
+                  <button
+                    onClick={() => setSelectedPhase('seed')}
+                    className={`px-2.5 py-1 rounded-lg transition-colors ${
+                      selectedPhase === 'seed' ? 'bg-emerald-600 text-white shadow-xs' : 'text-emerald-700 hover:bg-emerald-100'
+                    }`}
+                  >
+                    🌱 Seed Data (Contoh Terisi)
                   </button>
                   <button
                     onClick={() => setSelectedPhase('1')}

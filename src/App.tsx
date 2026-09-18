@@ -150,6 +150,12 @@ function AppContent() {
               </Suspense>
             </div>
           )}
+          {currentPath !== '/' &&
+            currentPath !== '/tentang' &&
+            currentPath !== '/login' &&
+            currentPath !== '/panduan' && (
+              <LandingPage onNavigate={navigate} onOpenGuide={() => setGuideModalOpen(true)} />
+            )}
         </main>
         <SupabaseGuideModal
           isOpen={guideModalOpen}

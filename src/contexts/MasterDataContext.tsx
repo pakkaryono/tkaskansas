@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Major, SchoolClass, Subject, Teacher, Student } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { SIMULATION_10_STUDENTS } from '../data/simulationSeed';
+import { generateUUID } from '../lib/utils';
 
 interface MasterDataContextType {
   majors: Major[];
@@ -917,7 +918,7 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const newStudentsToAdd: Student[] = [];
 
     for (const item of dataList) {
-      const newId = `s-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      const newId = generateUUID();
       const studentObj: Student = {
         id: newId,
         nis: item.nis,
@@ -946,7 +947,7 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const newTeachersToAdd: Teacher[] = [];
 
     for (const item of dataList) {
-      const newId = `t-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      const newId = generateUUID();
       const teacherObj: Teacher = {
         id: newId,
         nip: item.nip,
@@ -973,7 +974,7 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const newSubjectsToAdd: Subject[] = [];
 
     for (const item of dataList) {
-      const newId = `c-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      const newId = generateUUID();
       const subjectObj: Subject = {
         id: newId,
         code: item.code.toUpperCase(),
@@ -998,7 +999,7 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const newClassesToAdd: SchoolClass[] = [];
 
     for (const item of dataList) {
-      const newId = `cls-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      const newId = generateUUID();
       const classObj: SchoolClass = {
         id: newId,
         name: item.name,
@@ -1024,7 +1025,7 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const newMajorsToAdd: Major[] = [];
 
     for (const item of dataList) {
-      const newId = `m-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      const newId = generateUUID();
       const majorObj: Major = {
         id: newId,
         code: item.code.toUpperCase(),

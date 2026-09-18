@@ -34,11 +34,22 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- AUTO-REPAIR: Pastikan semua kolom profil ada jika tabel sudah pernah dibuat sebelumnya
+ALTER TABLE IF EXISTS public.profiles ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE IF EXISTS public.profiles ADD COLUMN IF NOT EXISTS phone_number TEXT;
+ALTER TABLE IF EXISTS public.profiles ADD COLUMN IF NOT EXISTS nip TEXT;
+ALTER TABLE IF EXISTS public.profiles ADD COLUMN IF NOT EXISTS nis TEXT;
+ALTER TABLE IF EXISTS public.profiles ADD COLUMN IF NOT EXISTS nisn TEXT;
+ALTER TABLE IF EXISTS public.profiles ADD COLUMN IF NOT EXISTS class_name TEXT;
+ALTER TABLE IF EXISTS public.profiles ADD COLUMN IF NOT EXISTS major_name TEXT;
+ALTER TABLE IF EXISTS public.profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+
 -- Index pencarian cepat
 CREATE INDEX IF NOT EXISTS idx_profiles_role ON public.profiles(role);
 CREATE INDEX IF NOT EXISTS idx_profiles_email ON public.profiles(email);
 CREATE INDEX IF NOT EXISTS idx_profiles_nis ON public.profiles(nis);
 CREATE INDEX IF NOT EXISTS idx_profiles_nip ON public.profiles(nip);
+CREATE INDEX IF NOT EXISTS idx_profiles_status ON public.profiles(status);
 
 -- 4. ROW LEVEL SECURITY (RLS) UNTUK TABEL PROFILES
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
@@ -174,6 +185,9 @@ CREATE TABLE IF NOT EXISTS public.majors (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE IF EXISTS public.majors ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE IF EXISTS public.majors ADD COLUMN IF NOT EXISTS description TEXT;
+
 CREATE INDEX IF NOT EXISTS idx_majors_code ON public.majors(code);
 CREATE INDEX IF NOT EXISTS idx_majors_status ON public.majors(status);
 
@@ -200,6 +214,9 @@ CREATE TABLE IF NOT EXISTS public.classes (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE IF EXISTS public.classes ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE IF EXISTS public.classes ADD COLUMN IF NOT EXISTS academic_year TEXT NOT NULL DEFAULT '2026/2027';
 
 CREATE INDEX IF NOT EXISTS idx_classes_grade ON public.classes(grade);
 CREATE INDEX IF NOT EXISTS idx_classes_major ON public.classes(major_id);
@@ -228,6 +245,12 @@ CREATE TABLE IF NOT EXISTS public.subjects (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE IF EXISTS public.subjects ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE IF EXISTS public.subjects ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE IF EXISTS public.subjects ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'Umum';
+ALTER TABLE IF EXISTS public.subjects ALTER COLUMN category DROP NOT NULL;
+ALTER TABLE IF EXISTS public.subjects ALTER COLUMN category SET DEFAULT 'Umum';
+
 CREATE INDEX IF NOT EXISTS idx_subjects_code ON public.subjects(code);
 CREATE INDEX IF NOT EXISTS idx_subjects_status ON public.subjects(status);
 
@@ -254,6 +277,9 @@ CREATE TABLE IF NOT EXISTS public.teachers (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE IF EXISTS public.teachers ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE IF EXISTS public.teachers ADD COLUMN IF NOT EXISTS phone_number TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_teachers_nip ON public.teachers(nip);
 CREATE INDEX IF NOT EXISTS idx_teachers_email ON public.teachers(email);
@@ -309,6 +335,10 @@ CREATE TABLE IF NOT EXISTS public.students (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE IF EXISTS public.students ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE IF EXISTS public.students ADD COLUMN IF NOT EXISTS phone_number TEXT;
+ALTER TABLE IF EXISTS public.students ADD COLUMN IF NOT EXISTS major_id UUID REFERENCES public.majors(id) ON DELETE RESTRICT;
 
 CREATE INDEX IF NOT EXISTS idx_students_nis ON public.students(nis);
 CREATE INDEX IF NOT EXISTS idx_students_class ON public.students(class_id);
@@ -386,6 +416,12 @@ CREATE TABLE IF NOT EXISTS public.questions (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE IF EXISTS public.questions ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE IF EXISTS public.questions ADD COLUMN IF NOT EXISTS scoring_method TEXT NOT NULL DEFAULT 'exact_match';
+ALTER TABLE IF EXISTS public.questions ADD COLUMN IF NOT EXISTS difficulty TEXT NOT NULL DEFAULT 'medium';
+ALTER TABLE IF EXISTS public.questions ADD COLUMN IF NOT EXISTS points NUMERIC(5,2) NOT NULL DEFAULT 10;
+ALTER TABLE IF EXISTS public.questions ADD COLUMN IF NOT EXISTS explanation TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_questions_subject ON public.questions(subject_id);
 CREATE INDEX IF NOT EXISTS idx_questions_teacher ON public.questions(teacher_id);
@@ -649,6 +685,13 @@ CREATE TABLE IF NOT EXISTS public.exams (
     CONSTRAINT valid_exam_time CHECK (end_at > start_at)
 );
 
+ALTER TABLE IF EXISTS public.exams ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'draft';
+ALTER TABLE IF EXISTS public.exams ADD COLUMN IF NOT EXISTS instructions TEXT;
+ALTER TABLE IF EXISTS public.exams ADD COLUMN IF NOT EXISTS pass_score NUMERIC NOT NULL DEFAULT 75;
+ALTER TABLE IF EXISTS public.exams ADD COLUMN IF NOT EXISTS randomize_questions BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE IF EXISTS public.exams ADD COLUMN IF NOT EXISTS randomize_options BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE IF EXISTS public.exams ADD COLUMN IF NOT EXISTS question_selection_method TEXT NOT NULL DEFAULT 'random';
+
 CREATE INDEX IF NOT EXISTS idx_exams_subject ON public.exams(subject_id);
 CREATE INDEX IF NOT EXISTS idx_exams_teacher ON public.exams(teacher_id);
 CREATE INDEX IF NOT EXISTS idx_exams_status ON public.exams(status);
@@ -817,6 +860,15 @@ CREATE TABLE IF NOT EXISTS public.exam_attempts (
     CONSTRAINT unique_student_exam_attempt UNIQUE (exam_id, student_id)
 );
 
+ALTER TABLE IF EXISTS public.exam_attempts ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'in_progress';
+ALTER TABLE IF EXISTS public.exam_attempts ADD COLUMN IF NOT EXISTS score NUMERIC(5,2);
+ALTER TABLE IF EXISTS public.exam_attempts ADD COLUMN IF NOT EXISTS total_points NUMERIC(5,2);
+ALTER TABLE IF EXISTS public.exam_attempts ADD COLUMN IF NOT EXISTS maximum_points NUMERIC(5,2);
+ALTER TABLE IF EXISTS public.exam_attempts ADD COLUMN IF NOT EXISTS has_pending_essay BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE IF EXISTS public.exam_attempts ADD COLUMN IF NOT EXISTS question_order JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE IF EXISTS public.exam_attempts ADD COLUMN IF NOT EXISTS option_order JSONB NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE IF EXISTS public.exam_attempts ADD COLUMN IF NOT EXISTS doubtful_questions JSONB NOT NULL DEFAULT '[]'::jsonb;
+
 CREATE INDEX IF NOT EXISTS idx_exam_attempts_exam ON public.exam_attempts(exam_id);
 CREATE INDEX IF NOT EXISTS idx_exam_attempts_student ON public.exam_attempts(student_id);
 CREATE INDEX IF NOT EXISTS idx_exam_attempts_status ON public.exam_attempts(status);
@@ -833,6 +885,9 @@ CREATE TABLE IF NOT EXISTS public.student_answers (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT unique_attempt_question UNIQUE (attempt_id, question_id)
 );
+
+ALTER TABLE IF EXISTS public.student_answers ADD COLUMN IF NOT EXISTS is_doubtful BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE IF EXISTS public.student_answers ADD COLUMN IF NOT EXISTS points_earned NUMERIC(5,2) DEFAULT 0;
 
 CREATE INDEX IF NOT EXISTS idx_student_answers_attempt ON public.student_answers(attempt_id);
 
@@ -1088,10 +1143,58 @@ export const SUPABASE_SEED_DATA_SQL = `-- ======================================
 -- 1. AKTIFKAN EKSTENSI KRIPTOGRAFI UNTUK PASSWORD AUTH
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
--- Nonaktifkan trigger validasi sementara agar seed data historis dapat masuk dengan presisi
-ALTER TABLE IF EXISTS public.exam_attempts DISABLE TRIGGER ALL;
-ALTER TABLE IF EXISTS public.student_answers DISABLE TRIGGER ALL;
-ALTER TABLE IF EXISTS public.profiles DISABLE TRIGGER ALL;
+-- AUTO-REPAIR: Pastikan semua tabel yang sudah ada memiliki kolom-kolom yang diperlukan
+ALTER TABLE IF EXISTS public.profiles ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE IF EXISTS public.profiles ADD COLUMN IF NOT EXISTS phone_number TEXT;
+ALTER TABLE IF EXISTS public.profiles ADD COLUMN IF NOT EXISTS nip TEXT;
+ALTER TABLE IF EXISTS public.profiles ADD COLUMN IF NOT EXISTS nis TEXT;
+ALTER TABLE IF EXISTS public.profiles ADD COLUMN IF NOT EXISTS nisn TEXT;
+ALTER TABLE IF EXISTS public.profiles ADD COLUMN IF NOT EXISTS class_name TEXT;
+ALTER TABLE IF EXISTS public.profiles ADD COLUMN IF NOT EXISTS major_name TEXT;
+ALTER TABLE IF EXISTS public.profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+
+ALTER TABLE IF EXISTS public.majors ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE IF EXISTS public.majors ADD COLUMN IF NOT EXISTS description TEXT;
+
+ALTER TABLE IF EXISTS public.classes ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE IF EXISTS public.classes ADD COLUMN IF NOT EXISTS academic_year TEXT NOT NULL DEFAULT '2026/2027';
+
+ALTER TABLE IF EXISTS public.subjects ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE IF EXISTS public.subjects ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE IF EXISTS public.subjects ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'Umum';
+ALTER TABLE IF EXISTS public.subjects ALTER COLUMN category DROP NOT NULL;
+ALTER TABLE IF EXISTS public.subjects ALTER COLUMN category SET DEFAULT 'Umum';
+
+ALTER TABLE IF EXISTS public.teachers ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE IF EXISTS public.teachers ADD COLUMN IF NOT EXISTS phone_number TEXT;
+
+ALTER TABLE IF EXISTS public.students ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE IF EXISTS public.students ADD COLUMN IF NOT EXISTS phone_number TEXT;
+ALTER TABLE IF EXISTS public.students ADD COLUMN IF NOT EXISTS major_id UUID;
+
+ALTER TABLE IF EXISTS public.questions ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE IF EXISTS public.questions ADD COLUMN IF NOT EXISTS scoring_method TEXT NOT NULL DEFAULT 'exact_match';
+ALTER TABLE IF EXISTS public.questions ADD COLUMN IF NOT EXISTS difficulty TEXT NOT NULL DEFAULT 'medium';
+ALTER TABLE IF EXISTS public.questions ADD COLUMN IF NOT EXISTS points NUMERIC(5,2) NOT NULL DEFAULT 10;
+ALTER TABLE IF EXISTS public.questions ADD COLUMN IF NOT EXISTS explanation TEXT;
+
+ALTER TABLE IF EXISTS public.exams ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'draft';
+ALTER TABLE IF EXISTS public.exams ADD COLUMN IF NOT EXISTS instructions TEXT;
+ALTER TABLE IF EXISTS public.exams ADD COLUMN IF NOT EXISTS pass_score NUMERIC(5,2) NOT NULL DEFAULT 75.00;
+ALTER TABLE IF EXISTS public.exams ADD COLUMN IF NOT EXISTS randomize_questions BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE IF EXISTS public.exams ADD COLUMN IF NOT EXISTS randomize_options BOOLEAN NOT NULL DEFAULT true;
+
+ALTER TABLE IF EXISTS public.exam_attempts ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'in_progress';
+ALTER TABLE IF EXISTS public.exam_attempts ADD COLUMN IF NOT EXISTS score NUMERIC(5,2);
+ALTER TABLE IF EXISTS public.exam_attempts ADD COLUMN IF NOT EXISTS total_points NUMERIC(6,2) DEFAULT 0;
+ALTER TABLE IF EXISTS public.exam_attempts ADD COLUMN IF NOT EXISTS maximum_points NUMERIC(6,2) DEFAULT 100;
+ALTER TABLE IF EXISTS public.exam_attempts ADD COLUMN IF NOT EXISTS has_pending_essay BOOLEAN DEFAULT false;
+ALTER TABLE IF EXISTS public.exam_attempts ADD COLUMN IF NOT EXISTS question_order JSONB;
+ALTER TABLE IF EXISTS public.exam_attempts ADD COLUMN IF NOT EXISTS option_order JSONB;
+ALTER TABLE IF EXISTS public.exam_attempts ADD COLUMN IF NOT EXISTS doubtful_questions JSONB;
+
+ALTER TABLE IF EXISTS public.student_answers ADD COLUMN IF NOT EXISTS is_doubtful BOOLEAN DEFAULT false;
+ALTER TABLE IF EXISTS public.student_answers ADD COLUMN IF NOT EXISTS points_earned NUMERIC(5,2);
 
 -- 2. AKUN OTENTIKASI (auth.users)
 -- Seluruh akun contoh menggunakan password: password123
@@ -1150,11 +1253,11 @@ INSERT INTO public.classes (id, name, grade, major_id, academic_year, status) VA
 ON CONFLICT (name) DO UPDATE SET grade = EXCLUDED.grade, major_id = EXCLUDED.major_id;
 
 -- 6. MASTER MATA PELAJARAN (Minimal 3 Mapel)
-INSERT INTO public.subjects (id, code, name, description, status) VALUES
-('c1111111-1111-1111-1111-111111111111', 'MTK-SMK', 'Matematika Terapan Kejuruan', 'Logika matematika, aljabar linier, trigonometri, dan kalkulasi teknik industri.', 'active'),
-('c4444444-4444-4444-4444-444444444444', 'KJ-TJKT', 'Administrasi Infrastruktur Jaringan', 'Routing dinamis OSPF/BGP, VLAN, firewalling MikroTik/Cisco, dan manajemen bandwidth.', 'active'),
-('c5555555-5555-5555-5555-555555555555', 'KJ-TKRO', 'Pemeliharaan Mesin Kendaraan Ringan', 'Diagnosis sistem Electronic Fuel Injection (EFI), engine tune up, dan overhaul mesin.', 'active')
-ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description;
+INSERT INTO public.subjects (id, code, name, description, category, status) VALUES
+('c1111111-1111-1111-1111-111111111111', 'MTK-SMK', 'Matematika Terapan Kejuruan', 'Logika matematika, aljabar linier, trigonometri, dan kalkulasi teknik industri.', 'Umum', 'active'),
+('c4444444-4444-4444-4444-444444444444', 'KJ-TJKT', 'Administrasi Infrastruktur Jaringan', 'Routing dinamis OSPF/BGP, VLAN, firewalling MikroTik/Cisco, dan manajemen bandwidth.', 'Kejuruan', 'active'),
+('c5555555-5555-5555-5555-555555555555', 'KJ-TKRO', 'Pemeliharaan Mesin Kendaraan Ringan', 'Diagnosis sistem Electronic Fuel Injection (EFI), engine tune up, dan overhaul mesin.', 'Kejuruan', 'active')
+ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description, category = EXCLUDED.category;
 
 -- 7. DATA GURU (Minimal 3 Guru)
 INSERT INTO public.teachers (id, nip, full_name, email, phone_number, status) VALUES
@@ -1450,18 +1553,186 @@ INSERT INTO public.student_answers (
     false, 10.00
 )
 ON CONFLICT (attempt_id, question_id) DO UPDATE SET points_earned = EXCLUDED.points_earned;
+`;
 
--- Aktifkan kembali trigger integritas data setelah selesai seeding
-ALTER TABLE IF EXISTS public.exam_attempts ENABLE TRIGGER ALL;
-ALTER TABLE IF EXISTS public.student_answers ENABLE TRIGGER ALL;
-ALTER TABLE IF EXISTS public.profiles ENABLE TRIGGER ALL;
+export const SUPABASE_QUICK_FIX_SQL = `-- ==============================================================================
+-- SKRIP PERBAIKAN STRUKTUR KOLOM & RPC (AUTO-REPAIR MISSING COLUMNS / ERROR 42703)
+-- Mengatasi tuntas: "ERROR: 42703: column status does not exist" & RPC Not Found
+-- Jalankan skrip ini langsung di Supabase Dashboard -> SQL Editor -> New Query -> Run
+-- ==============================================================================
+
+-- 1. Ekstensi UUID & Kriptografi
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- 2. Tambahkan kolom status & atribut penting ke semua tabel jika belum ada
+ALTER TABLE IF EXISTS public.profiles ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE IF EXISTS public.profiles ADD COLUMN IF NOT EXISTS phone_number TEXT;
+ALTER TABLE IF EXISTS public.profiles ADD COLUMN IF NOT EXISTS nip TEXT;
+ALTER TABLE IF EXISTS public.profiles ADD COLUMN IF NOT EXISTS nis TEXT;
+ALTER TABLE IF EXISTS public.profiles ADD COLUMN IF NOT EXISTS nisn TEXT;
+ALTER TABLE IF EXISTS public.profiles ADD COLUMN IF NOT EXISTS class_name TEXT;
+ALTER TABLE IF EXISTS public.profiles ADD COLUMN IF NOT EXISTS major_name TEXT;
+ALTER TABLE IF EXISTS public.profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+
+ALTER TABLE IF EXISTS public.majors ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE IF EXISTS public.majors ADD COLUMN IF NOT EXISTS description TEXT;
+
+ALTER TABLE IF EXISTS public.classes ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE IF EXISTS public.classes ADD COLUMN IF NOT EXISTS academic_year TEXT NOT NULL DEFAULT '2026/2027';
+
+ALTER TABLE IF EXISTS public.subjects ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE IF EXISTS public.subjects ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE IF EXISTS public.subjects ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'Umum';
+ALTER TABLE IF EXISTS public.subjects ALTER COLUMN category DROP NOT NULL;
+ALTER TABLE IF EXISTS public.subjects ALTER COLUMN category SET DEFAULT 'Umum';
+
+ALTER TABLE IF EXISTS public.teachers ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE IF EXISTS public.teachers ADD COLUMN IF NOT EXISTS phone_number TEXT;
+
+ALTER TABLE IF EXISTS public.students ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE IF EXISTS public.students ADD COLUMN IF NOT EXISTS phone_number TEXT;
+ALTER TABLE IF EXISTS public.students ADD COLUMN IF NOT EXISTS major_id UUID;
+
+ALTER TABLE IF EXISTS public.questions ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE IF EXISTS public.questions ADD COLUMN IF NOT EXISTS scoring_method TEXT NOT NULL DEFAULT 'exact_match';
+ALTER TABLE IF EXISTS public.questions ADD COLUMN IF NOT EXISTS difficulty TEXT NOT NULL DEFAULT 'medium';
+ALTER TABLE IF EXISTS public.questions ADD COLUMN IF NOT EXISTS points NUMERIC(5,2) NOT NULL DEFAULT 10;
+ALTER TABLE IF EXISTS public.questions ADD COLUMN IF NOT EXISTS explanation TEXT;
+
+ALTER TABLE IF EXISTS public.matching_pairs ADD COLUMN IF NOT EXISTS left_item TEXT NOT NULL DEFAULT '';
+ALTER TABLE IF EXISTS public.matching_pairs ADD COLUMN IF NOT EXISTS right_item TEXT NOT NULL DEFAULT '';
+ALTER TABLE IF EXISTS public.matching_pairs ADD COLUMN IF NOT EXISTS correct_match_key TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE IF EXISTS public.exams ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'draft';
+ALTER TABLE IF EXISTS public.exams ADD COLUMN IF NOT EXISTS instructions TEXT;
+ALTER TABLE IF EXISTS public.exams ADD COLUMN IF NOT EXISTS pass_score NUMERIC(5,2) NOT NULL DEFAULT 75.00;
+ALTER TABLE IF EXISTS public.exams ADD COLUMN IF NOT EXISTS randomize_questions BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE IF EXISTS public.exams ADD COLUMN IF NOT EXISTS randomize_options BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE IF EXISTS public.exams ADD COLUMN IF NOT EXISTS question_selection_method TEXT NOT NULL DEFAULT 'random';
+
+ALTER TABLE IF EXISTS public.exam_attempts ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'in_progress';
+ALTER TABLE IF EXISTS public.exam_attempts ADD COLUMN IF NOT EXISTS score NUMERIC(5,2);
+ALTER TABLE IF EXISTS public.exam_attempts ADD COLUMN IF NOT EXISTS total_points NUMERIC(6,2) DEFAULT 0;
+ALTER TABLE IF EXISTS public.exam_attempts ADD COLUMN IF NOT EXISTS maximum_points NUMERIC(6,2) DEFAULT 100;
+ALTER TABLE IF EXISTS public.exam_attempts ADD COLUMN IF NOT EXISTS has_pending_essay BOOLEAN DEFAULT false;
+ALTER TABLE IF EXISTS public.exam_attempts ADD COLUMN IF NOT EXISTS question_order JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE IF EXISTS public.exam_attempts ADD COLUMN IF NOT EXISTS option_order JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE IF EXISTS public.exam_attempts ADD COLUMN IF NOT EXISTS doubtful_questions JSONB DEFAULT '[]'::jsonb;
+
+ALTER TABLE IF EXISTS public.student_answers ADD COLUMN IF NOT EXISTS student_answer JSONB;
+ALTER TABLE IF EXISTS public.student_answers ADD COLUMN IF NOT EXISTS answer_data JSONB;
+ALTER TABLE IF EXISTS public.student_answers ADD COLUMN IF NOT EXISTS is_doubtful BOOLEAN DEFAULT false;
+ALTER TABLE IF EXISTS public.student_answers ADD COLUMN IF NOT EXISTS points_earned NUMERIC(5,2) DEFAULT 0;
+ALTER TABLE IF EXISTS public.student_answers ADD COLUMN IF NOT EXISTS feedback TEXT;
+ALTER TABLE IF EXISTS public.student_answers ADD COLUMN IF NOT EXISTS teacher_feedback TEXT;
+
+-- 3. Fungsi Helper Keamanan & RPC Ujian
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND (role = 'admin' OR role::text = 'admin')
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
+
+CREATE OR REPLACE FUNCTION public.is_teacher()
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND (role = 'guru' OR role::text = 'guru')
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
+
+CREATE OR REPLACE FUNCTION public.get_student_exam_payload(p_exam_id UUID)
+RETURNS JSONB AS $$
+DECLARE
+    v_result JSONB;
+BEGIN
+    SELECT jsonb_build_object(
+        'exam', (
+            SELECT row_to_json(e) FROM (
+                SELECT id, title, description, subject_id, grade, duration_minutes,
+                       start_at, end_at, instructions, randomize_questions, randomize_options, total_questions
+                FROM public.exams WHERE id = p_exam_id
+            ) e
+        ),
+        'questions', (
+            SELECT COALESCE(jsonb_agg(q_row), '[]'::jsonb)
+            FROM (
+                SELECT 
+                    q.id,
+                    q.code,
+                    q.question_type,
+                    q.question_text,
+                    q.image_url,
+                    q.difficulty,
+                    eq.points,
+                    eq.order_num,
+                    (
+                        SELECT COALESCE(jsonb_agg(jsonb_build_object(
+                            'id', qo.id,
+                            'option_key', qo.option_key,
+                            'option_text', qo.option_text,
+                            'image_url', qo.image_url,
+                            'order_num', qo.order_num
+                        ) ORDER BY qo.order_num), '[]'::jsonb)
+                        FROM public.question_options qo
+                        WHERE qo.question_id = q.id
+                    ) AS options,
+                    (
+                        SELECT COALESCE(jsonb_agg(jsonb_build_object(
+                            'id', mp.id,
+                            'left_item', mp.left_item,
+                            'right_item', mp.right_item,
+                            'order_num', mp.order_num
+                        ) ORDER BY mp.order_num), '[]'::jsonb)
+                        FROM public.matching_pairs mp
+                        WHERE mp.question_id = q.id
+                    ) AS matching_pairs
+                FROM public.exam_questions eq
+                JOIN public.questions q ON q.id = eq.question_id
+                WHERE eq.exam_id = p_exam_id
+                ORDER BY eq.order_num
+            ) q_row
+        )
+    ) INTO v_result;
+
+    RETURN v_result;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION public.get_student_exam_questions(p_exam_id UUID)
+RETURNS JSONB AS $$
+BEGIN
+    RETURN public.get_student_exam_payload(p_exam_id);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 4. Buat indeks status untuk performa kueri
+CREATE INDEX IF NOT EXISTS idx_profiles_status ON public.profiles(status);
+CREATE INDEX IF NOT EXISTS idx_majors_status ON public.majors(status);
+CREATE INDEX IF NOT EXISTS idx_classes_status ON public.classes(status);
+CREATE INDEX IF NOT EXISTS idx_subjects_status ON public.subjects(status);
+CREATE INDEX IF NOT EXISTS idx_teachers_status ON public.teachers(status);
+CREATE INDEX IF NOT EXISTS idx_students_status ON public.students(status);
+CREATE INDEX IF NOT EXISTS idx_questions_status ON public.questions(status);
+CREATE INDEX IF NOT EXISTS idx_exams_status ON public.exams(status);
+CREATE INDEX IF NOT EXISTS idx_exam_attempts_status ON public.exam_attempts(status);
 `;
 
 export const SUPABASE_ALL_MIGRATIONS_SQL = `-- ==============================================================================
 -- MASTER SKRIP MIGRASI SUPABASE LENGKAP + CONTOH DATA TERISI (SEED DATA)
 -- TES KEMAMPUAN AKADEMIK (TKA) SMKN 1 SONGGOM
 -- Dijalankan sekali jalan di: Supabase Dashboard -> SQL Editor -> New Query -> Run
+-- Dilengkapi Auto-Repair (Self-Healing) aman dijalankan berulang kali (Idempotent)
 -- ==============================================================================
+
+${SUPABASE_QUICK_FIX_SQL}
 
 ${SUPABASE_PHASE_1_SQL}
 
