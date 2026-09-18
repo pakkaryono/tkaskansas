@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { Exam, ExamStatus } from '../../types';
 import { useExam } from '../../contexts/ExamContext';
+import { RichTextViewer } from '../common/RichTextViewer';
 
 interface ExamDetailModalProps {
   exam: Exam | null;
@@ -255,9 +256,9 @@ export const ExamDetailModal: React.FC<ExamDetailModalProps> = ({
                         {eq.points} Poin
                       </span>
                     </div>
-                    <div
+                    <RichTextViewer
                       className="text-slate-600 text-[11px] line-clamp-2 pl-7"
-                      dangerouslySetInnerHTML={{ __html: eq.snapshot?.question_text || '' }}
+                      content={eq.snapshot?.question_text || ''}
                     />
                   </div>
                 ))

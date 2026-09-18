@@ -514,14 +514,26 @@ export const ExamProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [exams, subjects, teachers, majors, classes, examQuestions, getDynamicStatus]
   );
 
-  // Helper: Get questions snapshot for an exam
+  // Helper: Get questions snapshot for an exam (HANYA UNTUK GURU & ADMIN)
   const getExamQuestions = useCallback(
     (examId: string): ExamQuestion[] => {
+      if (profile && profile.role === 'siswa') {
+        AuditLogger.log({
+          action: 'UNAUTHORIZED_ACCESS_BLOCKED',
+          entity: 'exam_questions',
+          userId: profile.id,
+          userEmail: profile.email,
+          userRole: profile.role,
+          details: { examId, reason: 'Siswa dilarang mengakses snapshot butir soal mentah beserta kunci jawaban.' },
+          status: 'BLOCKED',
+        });
+        throw new Error('Akses Ditolak: Peserta ujian dilarang mengakses snapshot butir soal mentah.');
+      }
       return examQuestions
         .filter((eq) => eq.exam_id === examId)
         .sort((a, b) => a.order_num - b.order_num);
     },
-    [examQuestions]
+    [examQuestions, profile]
   );
 
   // Method 1: Create Exam (with Manual or Random question snapshotting)
@@ -530,6 +542,9 @@ export const ExamProvider: React.FC<{ children: React.ReactNode }> = ({ children
     selectedQuestionIds: string[] = [],
     selectionMethod: QuestionSelectionMethod = 'manual'
   ): Promise<Exam> => {
+    if (profile && profile.role === 'siswa') {
+      throw new Error('Akses Ditolak: Peserta ujian tidak diizinkan membuat ujian baru.');
+    }
     setLoading(true);
     try {
       const examId = `exam-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
@@ -609,6 +624,9 @@ export const ExamProvider: React.FC<{ children: React.ReactNode }> = ({ children
     examData: Partial<Exam>,
     selectedQuestionIds?: string[]
   ): Promise<Exam> => {
+    if (profile && profile.role === 'siswa') {
+      throw new Error('Akses Ditolak: Peserta ujian tidak diizinkan mengubah konfigurasi ujian.');
+    }
     setLoading(true);
     try {
       const nowIso = new Date().toISOString();
@@ -656,6 +674,9 @@ export const ExamProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Method 3: Delete Exam
   const deleteExam = async (id: string): Promise<{ success: boolean; message?: string }> => {
+    if (profile && profile.role === 'siswa') {
+      throw new Error('Akses Ditolak: Peserta ujian tidak diizinkan menghapus ujian.');
+    }
     setExams((prev) => prev.filter((e) => e.id !== id));
     setExamQuestions((prev) => prev.filter((eq) => eq.exam_id !== id));
     setExamAssignments((prev) => prev.filter((ea) => ea.exam_id !== id));
@@ -665,6 +686,9 @@ export const ExamProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Method 4: Duplicate Exam
   const duplicateExam = async (id: string): Promise<Exam> => {
+    if (profile && profile.role === 'siswa') {
+      throw new Error('Akses Ditolak: Peserta ujian tidak diizinkan menduplikasi ujian.');
+    }
     const existing = exams.find((e) => e.id === id);
     if (!existing) throw new Error('Ujian tidak ditemukan');
 
@@ -696,6 +720,9 @@ export const ExamProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Method 5: Update Exam Status Manual
   const updateExamStatus = async (id: string, status: ExamStatus): Promise<void> => {
+    if (profile && profile.role === 'siswa') {
+      throw new Error('Akses Ditolak: Peserta ujian tidak diizinkan mengubah status ujian.');
+    }
     setExams((prev) =>
       prev.map((e) => (e.id === id ? { ...e, status, updated_at: new Date().toISOString() } : e))
     );
@@ -806,6 +833,24 @@ export const ExamProvider: React.FC<{ children: React.ReactNode }> = ({ children
             'Akses Ditolak (Proteksi IDOR): Anda tidak memiliki izin mengakses atau memulai sesi ujian milik peserta lain.'
           );
         }
+
+        // Validasi hak kepesertaan (Rombel Kelas & Jurusan)
+        const studentObj = students.find(
+          (s) => s.email?.toLowerCase() === profile.email?.toLowerCase() || s.id === studentId
+        ) || null;
+        const eligibility = checkStudentEligibility(exam, studentObj);
+        if (!eligibility.eligible) {
+          AuditLogger.log({
+            action: 'UNAUTHORIZED_ACCESS_BLOCKED',
+            entity: 'exams',
+            userId: profile.id,
+            userEmail: profile.email,
+            userRole: profile.role,
+            details: { examId, studentId, reason: eligibility.reason },
+            status: 'BLOCKED',
+          });
+          throw new Error(`Akses Ditolak: ${eligibility.reason || 'Anda tidak terdaftar sebagai peserta ujian ini.'}`);
+        }
       }
 
       // Cek apakah siswa sudah memiliki attempt sebelumnya
@@ -897,6 +942,35 @@ export const ExamProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const attempt = examAttempts.find((a) => a.id === attemptId);
       if (!attempt) throw new Error('Attempt tidak ditemukan');
 
+      // ANTI-IDOR CHECK: Siswa hanya dapat submit lembar ujian miliknya sendiri
+      if (profile && profile.role === 'siswa') {
+        const myStudent = students.find(
+          (s) => s.email?.toLowerCase() === profile.email?.toLowerCase() || s.id === profile.id
+        );
+        const myId = myStudent?.id || profile.id;
+        const isSelf =
+          attempt.student_id === myId ||
+          (attempt.student_id.startsWith('demo-siswa') && myId.startsWith('demo-siswa'));
+
+        if (!isSelf) {
+          AuditLogger.log({
+            action: 'IDOR_PREVENTION_BLOCKED',
+            entity: 'exam_attempts_submit',
+            userId: profile.id,
+            userEmail: profile.email,
+            userRole: profile.role,
+            details: { attemptId, targetStudentId: attempt.student_id, actualStudentId: myId },
+            status: 'BLOCKED',
+          });
+          throw new Error('Akses Ditolak (Proteksi IDOR): Anda tidak memiliki izin mengumpulkan lembar ujian milik peserta lain.');
+        }
+      }
+
+      // IDEMPOTENSI SUBMIT: Mencegah duplicate request submit dan race condition
+      if (attempt.status !== 'in_progress') {
+        return attempt;
+      }
+
       const finishedIso = new Date().toISOString();
       const baseAttempt: ExamAttempt = {
         ...attempt,
@@ -944,6 +1018,9 @@ export const ExamProvider: React.FC<{ children: React.ReactNode }> = ({ children
       questionId: string,
       grading: { score: number; feedback?: string; grader: string }
     ): Promise<ExamAttempt> => {
+      if (profile && profile.role === 'siswa') {
+        throw new Error('Akses Ditolak: Peserta ujian tidak diizinkan melakukan penilaian esai.');
+      }
       const attempt = examAttempts.find((a) => a.id === attemptId);
       if (!attempt) throw new Error('Attempt tidak ditemukan.');
 
@@ -993,6 +1070,9 @@ export const ExamProvider: React.FC<{ children: React.ReactNode }> = ({ children
         complexScoringMethod?: 'exact_match' | 'partial_credit';
       }
     ): Promise<{ affectedAttempts: number; history: RegradeHistory[] }> => {
+      if (profile && profile.role === 'siswa') {
+        throw new Error('Akses Ditolak: Peserta ujian dilarang menjalankan kalkulasi ulang (regrading).');
+      }
       const attemptsToRegrade = examAttempts.filter(
         (a) => a.exam_id === examId && (a.status === 'submitted' || a.status === 'expired')
       );
@@ -1127,6 +1207,12 @@ export const ExamProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error('Ujian telah selesai atau dikumpulkan. Jawaban tidak dapat diubah lagi.');
       }
 
+      // OPTIMASI LOAD TESTING & MENCEGAH DUPLIKASI REQUEST:
+      // Jika butir jawaban sama persis dengan yang tersimpan, abaikan write/re-render
+      if (JSON.stringify(attempt.answers?.[questionId]) === JSON.stringify(answer)) {
+        return;
+      }
+
       const now = currentServerTime.getTime();
       const deadline = new Date(attempt.deadline_time).getTime();
       if (now > deadline) {
@@ -1160,6 +1246,18 @@ export const ExamProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const attempt = examAttempts.find((a) => a.id === attemptId);
       if (!attempt || attempt.status !== 'in_progress') return;
 
+      // ANTI-IDOR CHECK: Siswa hanya dapat menandai soal di attempt miliknya sendiri
+      if (profile && profile.role === 'siswa') {
+        const myStudent = students.find(
+          (s) => s.email?.toLowerCase() === profile.email?.toLowerCase() || s.id === profile.id
+        );
+        const myId = myStudent?.id || profile.id;
+        const isSelf =
+          attempt.student_id === myId ||
+          (attempt.student_id.startsWith('demo-siswa') && myId.startsWith('demo-siswa'));
+        if (!isSelf) return;
+      }
+
       setExamAttempts((prev) =>
         prev.map((att) => {
           if (att.id === attemptId) {
@@ -1178,7 +1276,7 @@ export const ExamProvider: React.FC<{ children: React.ReactNode }> = ({ children
         })
       );
     },
-    [examAttempts]
+    [examAttempts, profile, students]
   );
 
   // Method 11: GET STUDENT EXAM PAYLOAD (CRITICAL SECURITY: 100% STRIPPED OF ANSWER KEYS & ANTI-IDOR)
@@ -1205,6 +1303,21 @@ export const ExamProvider: React.FC<{ children: React.ReactNode }> = ({ children
             userEmail: profile.email,
             userRole: profile.role,
             details: { examId, attemptedStudentId: studentId, actualStudentId: myId },
+            status: 'BLOCKED',
+          });
+          return null;
+        }
+
+        // Validasi hak kepesertaan (Rombel Kelas & Jurusan)
+        const eligibility = checkStudentEligibility(exam, myStudent || null);
+        if (!eligibility.eligible) {
+          AuditLogger.log({
+            action: 'UNAUTHORIZED_ACCESS_BLOCKED',
+            entity: 'student_exam_payload',
+            userId: profile.id,
+            userEmail: profile.email,
+            userRole: profile.role,
+            details: { examId, studentId, reason: eligibility.reason },
             status: 'BLOCKED',
           });
           return null;
@@ -1320,7 +1433,7 @@ export const ExamProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const value = useMemo(
     () => ({
       exams,
-      examQuestions,
+      examQuestions: profile?.role === 'siswa' ? [] : examQuestions,
       examAssignments,
       examAttempts,
       loading,
@@ -1354,6 +1467,7 @@ export const ExamProvider: React.FC<{ children: React.ReactNode }> = ({ children
       getAttemptResultSummary,
     }),
     [
+      profile?.role,
       exams,
       examQuestions,
       examAssignments,

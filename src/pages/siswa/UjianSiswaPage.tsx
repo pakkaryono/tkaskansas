@@ -92,8 +92,34 @@ export const UjianSiswaPage: React.FC<UjianSiswaPageProps> = ({ examId, onNaviga
   const [testRunnerOpen, setTestRunnerOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Autosave Debounce Ref
+  // Autosave Debounce & Pending Ref
   const autosaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingAnswerRef = useRef<{ attemptId: string; questionId: string; answer: any } | null>(null);
+
+  // Flush Autosave Pending (langsung simpan tanpa menunggu timer habis)
+  const flushPendingAutosave = useCallback(() => {
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+    if (pendingAnswerRef.current) {
+      const { attemptId, questionId, answer } = pendingAnswerRef.current;
+      try {
+        saveStudentAnswer(attemptId, questionId, answer);
+        setSaveStatus('saved');
+        const timeStr = new Date().toLocaleTimeString('id-ID', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        });
+        setLastSavedTime(timeStr);
+        setSaveErrorMessage(null);
+      } catch (err: any) {
+        console.error('Autosave flush error:', err);
+      }
+      pendingAnswerRef.current = null;
+    }
+  }, [saveStudentAnswer]);
 
   // 1. Inisialisasi Ujian dan Attempt saat halaman dimuat
   useEffect(() => {
@@ -129,13 +155,20 @@ export const UjianSiswaPage: React.FC<UjianSiswaPageProps> = ({ examId, onNaviga
     }
   }, [examAttempts, activeAttemptId]);
 
-  // Handle Perubahan Jawaban dengan Debounce Autosave
+  // Handle Perubahan Jawaban dengan Debounce Autosave & Deduplikasi
   const handleAnswerChange = useCallback(
     (newAnswer: any) => {
       if (!payload || !activeAttemptId || attemptStatus !== 'in_progress') return;
 
       const currentQ = payload.questions[currentIndex];
       if (!currentQ) return;
+
+      // OPTIMASI LOAD TESTING & CEGAH REQUEST DUPLIKAT:
+      // Jika jawaban tidak berubah (misal klik ulang opsi yang sama), abaikan write
+      const prevAnswer = studentAnswers[currentQ.id];
+      if (JSON.stringify(prevAnswer) === JSON.stringify(newAnswer)) {
+        return;
+      }
 
       // Update state instan di client
       setStudentAnswers((prev) => ({
@@ -145,14 +178,26 @@ export const UjianSiswaPage: React.FC<UjianSiswaPageProps> = ({ examId, onNaviga
 
       setSaveStatus('saving');
 
+      // Catat pending answer
+      pendingAnswerRef.current = {
+        attemptId: activeAttemptId,
+        questionId: currentQ.id,
+        answer: newAnswer,
+      };
+
       // Debounce penyimpanan ke context/DB
       if (autosaveTimerRef.current) {
         clearTimeout(autosaveTimerRef.current);
       }
 
+      // 1000ms untuk essay (agar hemat request saat mengetik), 400ms untuk tipe pilihan/matching
+      const isEssay = currentQ.type === 'essay';
+      const debounceDelay = isEssay ? 1000 : 400;
+
       autosaveTimerRef.current = setTimeout(() => {
         try {
           saveStudentAnswer(activeAttemptId, currentQ.id, newAnswer);
+          pendingAnswerRef.current = null;
           setSaveStatus('saved');
           const timeStr = new Date().toLocaleTimeString('id-ID', {
             hour: '2-digit',
@@ -166,9 +211,9 @@ export const UjianSiswaPage: React.FC<UjianSiswaPageProps> = ({ examId, onNaviga
           setSaveStatus('error');
           setSaveErrorMessage(err.message || 'Gagal menyimpan');
         }
-      }, 400); // 400ms debounce
+      }, debounceDelay);
     },
-    [payload, activeAttemptId, currentIndex, attemptStatus, saveStudentAnswer]
+    [payload, activeAttemptId, currentIndex, attemptStatus, studentAnswers, saveStudentAnswer]
   );
 
   // Toggle Ragu-Ragu
@@ -180,22 +225,30 @@ export const UjianSiswaPage: React.FC<UjianSiswaPageProps> = ({ examId, onNaviga
     toggleDoubtfulQuestion(activeAttemptId, currentQ.id);
   };
 
-  // Navigasi Soal
+  // Navigasi Soal dengan Jaminan Flush Autosave
   const handlePrevQuestion = () => {
+    flushPendingAutosave();
     if (currentIndex > 0) {
       setCurrentIndex(currentIndex - 1);
     }
   };
 
   const handleNextQuestion = () => {
+    flushPendingAutosave();
     if (payload && currentIndex < payload.questions.length - 1) {
       setCurrentIndex(currentIndex + 1);
     }
   };
 
+  const handleSelectQuestionIndex = (index: number) => {
+    flushPendingAutosave();
+    setCurrentIndex(index);
+  };
+
   // Submit Ujian Manual
   const handleConfirmSubmit = async () => {
     if (!activeAttemptId) return;
+    flushPendingAutosave();
     setIsSubmitting(true);
     try {
       await submitAttempt(activeAttemptId);
@@ -211,6 +264,7 @@ export const UjianSiswaPage: React.FC<UjianSiswaPageProps> = ({ examId, onNaviga
   // Auto Submit saat waktu habis
   const handleTimeUp = useCallback(async () => {
     if (!activeAttemptId || attemptStatus !== 'in_progress') return;
+    flushPendingAutosave();
     try {
       await submitAttempt(activeAttemptId);
       setAttemptStatus('expired');
@@ -218,7 +272,14 @@ export const UjianSiswaPage: React.FC<UjianSiswaPageProps> = ({ examId, onNaviga
     } catch (err) {
       console.error('Auto-submit error:', err);
     }
-  }, [activeAttemptId, attemptStatus, submitAttempt]);
+  }, [activeAttemptId, attemptStatus, flushPendingAutosave, submitAttempt]);
+
+  // Jaminan Autosave Terakhir saat Unmount / Meninggalkan Halaman
+  useEffect(() => {
+    return () => {
+      flushPendingAutosave();
+    };
+  }, [flushPendingAutosave]);
 
   // Loading State
   if (!payload && !loadError) {
@@ -486,7 +547,7 @@ export const UjianSiswaPage: React.FC<UjianSiswaPageProps> = ({ examId, onNaviga
             currentIndex={currentIndex}
             answers={studentAnswers}
             doubtfulQuestionIds={doubtfulIds}
-            onSelectIndex={setCurrentIndex}
+            onSelectIndex={handleSelectQuestionIndex}
           />
         </aside>
       </div>
@@ -562,7 +623,7 @@ export const UjianSiswaPage: React.FC<UjianSiswaPageProps> = ({ examId, onNaviga
               currentIndex={currentIndex}
               answers={studentAnswers}
               doubtfulQuestionIds={doubtfulIds}
-              onSelectIndex={setCurrentIndex}
+              onSelectIndex={handleSelectQuestionIndex}
               onCloseMobile={() => setPaletteMobileOpen(false)}
             />
           </div>

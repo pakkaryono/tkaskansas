@@ -28,6 +28,7 @@ import {
 import { useMasterData } from '../../contexts/MasterDataContext';
 import { useQuestionBank } from '../../contexts/QuestionBankContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { RichTextViewer } from '../common/RichTextViewer';
 
 interface ExamFormModalProps {
   isOpen: boolean;
@@ -735,9 +736,9 @@ export const ExamFormModal: React.FC<ExamFormModalProps> = ({
                                 {q.points} Poin
                               </span>
                             </div>
-                            <p
+                            <RichTextViewer
                               className="text-slate-600 text-[11px] line-clamp-2"
-                              dangerouslySetInnerHTML={{ __html: q.question_text }}
+                              content={q.question_text}
                             />
                           </div>
                         </div>

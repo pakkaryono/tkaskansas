@@ -96,15 +96,17 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         </div>
 
-        {/* Supabase Guide Button */}
-        <button
-          onClick={onOpenGuide}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-medium text-slate-700 shadow-xs transition-colors"
-          title="Lihat Skrip SQL & Status Supabase"
-        >
-          <Database className="w-3.5 h-3.5 text-blue-600" />
-          <span className="hidden sm:inline">SQL Schema</span>
-        </button>
+        {/* Supabase Guide Button - Admin Only */}
+        {role === 'admin' && (
+          <button
+            onClick={onOpenGuide}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-medium text-slate-700 shadow-xs transition-colors"
+            title="Lihat Skrip SQL & Status Supabase"
+          >
+            <Database className="w-3.5 h-3.5 text-blue-600" />
+            <span className="hidden sm:inline">SQL Schema</span>
+          </button>
+        )}
 
         {/* User Avatar & Name */}
         <button

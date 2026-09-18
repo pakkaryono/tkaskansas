@@ -65,10 +65,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { name: 'Jurusan', path: '/admin/jurusan', icon: FolderGit2 },
         { name: 'Bank Soal', path: '/admin/bank-soal', icon: FileQuestion },
         { name: 'Jadwal & Ujian', path: '/admin/ujian', icon: Calendar },
-        { name: 'Laporan Seluruh Siswa', path: '/admin/laporan', icon: BarChart3, badge: 'Fase 7' },
+        { name: 'Laporan Seluruh Siswa', path: '/admin/laporan', icon: BarChart3 },
         { name: 'Penilaian & Regrading', path: '/admin/penilaian', icon: Award },
-        { name: 'Import / Export Excel', path: '/admin/import-export', icon: FileSpreadsheet, badge: 'Fase 8' },
-        { name: 'Checklist Kesiapan', path: '/admin/checklist', icon: Shield, badge: 'Fase 10' },
+        { name: 'Import / Export Excel', path: '/admin/import-export', icon: FileSpreadsheet },
+        { name: 'Checklist Kesiapan', path: '/admin/checklist', icon: Shield },
         { name: 'Panduan & Docs', path: '/admin/dokumentasi', icon: BookOpen },
       ];
     } else if (userRole === 'guru') {
@@ -77,7 +77,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { name: 'Profil', path: '/guru/profil', icon: User },
         { name: 'Bank Soal', path: '/guru/bank-soal', icon: FileQuestion },
         { name: 'Jadwal & Ujian', path: '/guru/ujian', icon: Calendar },
-        { name: 'Laporan Hasil Mapel', path: '/guru/laporan', icon: BarChart3, badge: 'Fase 7' },
+        { name: 'Laporan Hasil Mapel', path: '/guru/laporan', icon: BarChart3 },
         { name: 'Penilaian & Esai', path: '/guru/penilaian', icon: Award },
         { name: 'Panduan Pengguna', path: '/guru/dokumentasi', icon: BookOpen },
       ];
@@ -86,7 +86,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { name: 'Dashboard', path: '/siswa/dashboard', icon: LayoutDashboard },
         { name: 'Profil', path: '/siswa/profil', icon: User },
         { name: 'Jadwal & Ujian', path: '/siswa/ujian', icon: Calendar },
-        { name: 'Laporan Nilai Siswa', path: '/siswa/laporan', icon: BarChart3, badge: 'Fase 7' },
+        { name: 'Laporan Nilai Siswa', path: '/siswa/laporan', icon: BarChart3 },
         { name: 'Hasil & Lembar Ujian', path: '/siswa/nilai', icon: Award },
         { name: 'Panduan Ujian', path: '/siswa/dokumentasi', icon: BookOpen },
       ];
@@ -202,16 +202,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           {/* Quick Guide Trigger & PWA Install */}
           <div className="pt-4 mt-4 border-t border-slate-100 space-y-2">
-            <button
-              onClick={() => {
-                onCloseMobile();
-                onOpenGuide();
-              }}
-              className="w-full flex items-center gap-3 px-3.5 py-2 rounded-xl text-xs font-medium text-slate-600 hover:text-blue-700 hover:bg-blue-50 transition-colors"
-            >
-              <Database className="w-4 h-4 text-blue-600" />
-              <span>Panduan & Skrip SQL</span>
-            </button>
+            {role === 'admin' && (
+              <button
+                onClick={() => {
+                  onCloseMobile();
+                  onOpenGuide();
+                }}
+                className="w-full flex items-center gap-3 px-3.5 py-2 rounded-xl text-xs font-medium text-slate-600 hover:text-blue-700 hover:bg-blue-50 transition-colors"
+              >
+                <Database className="w-4 h-4 text-blue-600" />
+                <span>Panduan & Skrip SQL</span>
+              </button>
+            )}
             <div className="px-2 pt-1">
               <PWAInstallButton variant="full" className="w-full justify-center" />
             </div>

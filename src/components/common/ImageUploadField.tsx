@@ -65,8 +65,9 @@ export const ImageUploadField: React.FC<ImageUploadFieldProps> = ({
     try {
       if (isSupabaseConfigured && supabase) {
         // Unggah ke Supabase Storage bucket 'question-images'
-        const fileExt = file.name.split('.').pop() || 'png';
-        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
+        const rawExt = file.name.split('.').pop()?.toLowerCase() || 'png';
+        const safeExt = ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(rawExt) ? rawExt : 'png';
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${safeExt}`;
         const filePath = `questions/${fileName}`;
 
         const { error: uploadError } = await supabase.storage

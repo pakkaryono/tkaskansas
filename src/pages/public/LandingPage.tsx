@@ -63,14 +63,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, onOpenGuid
                 <span>Tentang TKA</span>
                 <ChevronRight className="w-4 h-4" />
               </button>
-
-              <button
-                onClick={onOpenGuide}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 text-xs sm:text-sm font-medium transition-colors"
-              >
-                <Database className="w-4 h-4 text-blue-400" />
-                <span>Panduan Supabase</span>
-              </button>
             </div>
           </div>
         </div>

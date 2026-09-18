@@ -128,7 +128,6 @@ function AppContent() {
     return (
       <div className="min-h-screen flex flex-col bg-slate-50">
         <NetworkStatusBanner />
-        <SupabaseStatusBanner onOpenGuide={() => setGuideModalOpen(true)} />
         <Navbar
           currentPath={currentPath}
           onNavigate={navigate}
@@ -177,7 +176,9 @@ function AppContent() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
       <NetworkStatusBanner />
-      <SupabaseStatusBanner onOpenGuide={() => setGuideModalOpen(true)} />
+      {role === 'admin' && (
+        <SupabaseStatusBanner onOpenGuide={() => setGuideModalOpen(true)} />
+      )}
 
       <div className="flex-1 flex flex-row">
         {/* Sidebar Navigasi */}

@@ -5,29 +5,24 @@ import {
   EyeOff,
   LogIn,
   AlertCircle,
-  Database,
   ArrowLeft,
   Shield,
-  UserCheck,
   KeyRound,
   Check
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { DEMO_USERS, isSupabaseConfigured } from '../../lib/supabase';
-import type { UserRole } from '../../types';
 
 interface LoginPageProps {
   onNavigate: (path: string) => void;
-  onOpenGuide: () => void;
+  onOpenGuide?: () => void;
 }
 
-export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate, onOpenGuide }) => {
-  const { login, loginAsDemo, resetPassword, loading, error, clearError } = useAuth();
+export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
+  const { login, resetPassword, loading, error, clearError } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [selectedDemoRole, setSelectedDemoRole] = useState<UserRole | null>(null);
 
   // Password Reset Modal State
   const [resetModalOpen, setResetModalOpen] = useState(false);
@@ -57,18 +52,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate, onOpenGuide })
       else if (result.role === 'guru') onNavigate('/guru/dashboard');
       else if (result.role === 'siswa') onNavigate('/siswa/dashboard');
     }
-  };
-
-  const handleQuickDemoLogin = (role: UserRole) => {
-    setSelectedDemoRole(role);
-    const demo = DEMO_USERS[role];
-    setEmail(demo.email);
-    setPassword(demo.password);
-
-    loginAsDemo(role);
-    if (role === 'admin') onNavigate('/admin/dashboard');
-    else if (role === 'guru') onNavigate('/guru/dashboard');
-    else if (role === 'siswa') onNavigate('/siswa/dashboard');
   };
 
   return (
@@ -101,25 +84,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate, onOpenGuide })
           </div>
 
           <div className="p-6 sm:p-8 space-y-6">
-            {/* Supabase Status Hint */}
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="font-semibold text-slate-700 flex items-center gap-1.5">
-                  <Database className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Backend: Supabase Auth & PostgreSQL</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={onOpenGuide}
-                  className="text-blue-600 hover:underline font-medium"
-                >
-                  Panduan
-                </button>
-              </div>
-              <p className="text-[11px] text-slate-500 leading-relaxed">
-                {isSupabaseConfigured
-                  ? 'Supabase aktif! Anda dapat login dengan akun resmi dari tabel auth.users.'
-                  : 'Mode Evaluasi Aktif. Anda dapat langsung mengklik tombol "Coba Akun Demo" di bawah.'}
+            {/* Info Petunjuk Akun */}
+            <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-100 text-xs text-blue-900 flex items-start gap-2.5">
+              <Shield className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+              <p className="text-[12px] leading-relaxed text-blue-800">
+                Silakan masuk menggunakan alamat email dan kata sandi akun resmi Anda yang telah didaftarkan dalam sistem basis data sekolah (Admin, Guru, atau Siswa).
               </p>
             </div>
 
@@ -211,49 +180,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate, onOpenGuide })
                 )}
               </button>
             </form>
-
-            {/* Quick Demo Accounts Selection */}
-            <div className="pt-4 border-t border-slate-200">
-              <div className="text-center mb-3">
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                  Coba Masuk Cepat (Evaluasi Role)
-                </span>
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleQuickDemoLogin('admin')}
-                  className="p-2.5 rounded-xl border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-900 text-center transition-all group cursor-pointer"
-                >
-                  <div className="font-bold text-xs group-hover:scale-105 transition-transform">
-                    Admin
-                  </div>
-                  <div className="text-[10px] text-purple-600 mt-0.5 truncate">Semua Akses</div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleQuickDemoLogin('guru')}
-                  className="p-2.5 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 text-center transition-all group cursor-pointer"
-                >
-                  <div className="font-bold text-xs group-hover:scale-105 transition-transform">
-                    Guru
-                  </div>
-                  <div className="text-[10px] text-emerald-600 mt-0.5 truncate">Kelola Soal</div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleQuickDemoLogin('siswa')}
-                  className="p-2.5 rounded-xl border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-900 text-center transition-all group cursor-pointer"
-                >
-                  <div className="font-bold text-xs group-hover:scale-105 transition-transform">
-                    Siswa
-                  </div>
-                  <div className="text-[10px] text-blue-600 mt-0.5 truncate">Ikuti Ujian</div>
-                </button>
-              </div>
-            </div>
           </div>
         </div>
 

@@ -23,6 +23,7 @@ import { Exam, StudentExamPayload, StudentQuestionItem, Student } from '../../ty
 import { useExam } from '../../contexts/ExamContext';
 import { useMasterData } from '../../contexts/MasterDataContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { RichTextViewer } from '../../components/common/RichTextViewer';
 
 interface JadwalUjianSiswaPageProps {
   onNavigate?: (path: string) => void;
@@ -303,9 +304,9 @@ export const JadwalUjianSiswaPage: React.FC<JadwalUjianSiswaPageProps> = ({ onNa
                   </div>
 
                   {/* Pertanyaan */}
-                  <div
+                  <RichTextViewer
+                    content={currentQ.question_text}
                     className="text-sm font-medium text-slate-900 leading-relaxed"
-                    dangerouslySetInnerHTML={{ __html: currentQ.question_text }}
                   />
 
                   {/* Pilihan Opsi (PG Biasa / PG Kompleks) */}

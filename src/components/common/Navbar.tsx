@@ -83,13 +83,15 @@ export const Navbar: React.FC<NavbarProps> = ({ currentPath, onNavigate, onOpenG
                 <span>Panduan & Docs</span>
               </span>
             </button>
-            <button
-              onClick={onOpenGuide}
-              className="px-3 py-2 rounded-lg text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 flex items-center gap-1.5 transition-colors"
-            >
-              <Database className="w-4 h-4 text-blue-600" />
-              <span>SQL Schema</span>
-            </button>
+            {user && profile?.role === 'admin' && (
+              <button
+                onClick={onOpenGuide}
+                className="px-3 py-2 rounded-lg text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 flex items-center gap-1.5 transition-colors"
+              >
+                <Database className="w-4 h-4 text-blue-600" />
+                <span>SQL Schema</span>
+              </button>
+            )}
           </nav>
 
           {/* CTA Button, PWA Install & Auth State */}
@@ -156,16 +158,18 @@ export const Navbar: React.FC<NavbarProps> = ({ currentPath, onNavigate, onOpenG
           >
             Panduan & Dokumentasi
           </button>
-          <button
-            onClick={() => {
-              setMobileMenuOpen(false);
-              onOpenGuide();
-            }}
-            className="w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-          >
-            <Database className="w-4 h-4 text-blue-600" />
-            <span>Panduan & Schema SQL Supabase</span>
-          </button>
+          {user && profile?.role === 'admin' && (
+            <button
+              onClick={() => {
+                setMobileMenuOpen(false);
+                onOpenGuide();
+              }}
+              className="w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+            >
+              <Database className="w-4 h-4 text-blue-600" />
+              <span>Panduan & Schema SQL Supabase</span>
+            </button>
+          )}
 
           <div className="pt-2 border-t border-slate-100">
             {user && profile ? (

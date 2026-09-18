@@ -1,7 +1,10 @@
-// File ini berisi script SQL lengkap untuk inisialisasi database Supabase
-// Guru/Admin/Siswa dapat membaca dan menyalin script ini langsung ke SQL Editor di Supabase.
+-- ==============================================================================
+-- MASTER SKRIP MIGRASI SUPABASE LENGKAP (FASE 1 S.D FASE 5)
+-- TES KEMAMPUAN AKADEMIK (TKA) SMKN 1 SONGGOM
+-- Dijalankan sekali jalan di: Supabase Dashboard -> SQL Editor -> New Query -> Run
+-- ==============================================================================
 
-export const SUPABASE_PHASE_1_SQL = `-- ==============================================================================
+-- ==============================================================================
 -- SKRIP SQL FASE 1: TES KEMAMPUAN AKADEMIK (TKA) SMKN 1 SONGGOM
 -- Jalankan skrip ini di: Supabase Dashboard -> SQL Editor -> New Query -> Run
 -- ==============================================================================
@@ -155,9 +158,9 @@ DROP POLICY IF EXISTS "Semua user terotentikasi dapat membuat log" ON public.aud
 CREATE POLICY "Semua user terotentikasi dapat membuat log"
 ON public.audit_logs FOR INSERT 
 WITH CHECK (auth.role() = 'authenticated');
-`;
 
-export const SUPABASE_PHASE_2_SQL = `-- ==============================================================================
+
+-- ==============================================================================
 -- SKRIP SQL FASE 2: MASTER DATA TKA SMKN 1 SONGGOM
 -- Meliputi: Jurusan, Kelas, Mata Pelajaran, Guru, Relasi Guru-Mapel, dan Siswa
 -- Jalankan skrip ini setelah FASE 1 selesai dieksekusi di SQL Editor Supabase
@@ -357,9 +360,9 @@ INSERT INTO public.subjects (id, code, name, description, status) VALUES
 ('c4444444-4444-4444-4444-444444444444', 'KJ-TJKT', 'Administrasi Infrastruktur Jaringan', 'Routing dinamis, VLAN, firewalling, mikrotik, dan manajemen bandwidth jaringan.', 'active'),
 ('c5555555-5555-5555-5555-555555555555', 'KJ-TKRO', 'Pemeliharaan Mesin Kendaraan Ringan', 'Diagnosis sistem EFI, engine tune up, sistem pelumasan dan pendinginan motor bakar.', 'active')
 ON CONFLICT (code) DO NOTHING;
-`;
 
-export const SUPABASE_PHASE_3_SQL = `-- ==============================================================================
+
+-- ==============================================================================
 -- SKRIP SQL FASE 3: BANK SOAL TKA SMKN 1 SONGGOM
 -- Meliputi: Questions, Question Options, Question Answers (Esai), Matching Pairs,
 -- Supabase Storage Bucket 'question-images', serta Row Level Security (RLS).
@@ -617,9 +620,9 @@ CREATE TRIGGER trg_questions_updated_at
     BEFORE UPDATE ON public.questions
     FOR EACH ROW
     EXECUTE FUNCTION public.set_questions_updated_at();
-`;
 
-export const SUPABASE_PHASE_4_SQL = `-- ==============================================================================
+
+-- ==============================================================================
 -- SKRIP SQL FASE 4: MANAJEMEN UJIAN DAN PENJADWALAN CBT
 -- Meliputi: Tabel exams, exam_classes, exam_questions, serta RLS ketat anti-bocor kunci.
 -- Jalankan skrip ini sebelum FASE 5 di SQL Editor Supabase.
@@ -788,9 +791,9 @@ USING (
 -- SISWA TIDAK DIIZINKAN melakukan SELECT langsung ke tabel exam_questions
 -- karena kolom snapshot memuat objek soal lengkap beserta 'is_correct' dan 'reference_answer'.
 -- Siswa wajib mengambil soal tersanitasi melalui RPC get_student_exam_payload.
-`;
 
-export const SUPABASE_PHASE_5_SQL = `-- ==============================================================================
+
+-- ==============================================================================
 -- SKRIP SQL FASE 5: PELAKSANAAN UJIAN SISWA (CBT ENGINE & SECURITY)
 -- Meliputi: exam_attempts, student_answers, Anti-IDOR, Anti-Skor Tampering, dan Trigger Timer.
 -- ==============================================================================
@@ -1077,9 +1080,8 @@ USING (
         )
     )
 );
-`;
 
-export const SUPABASE_SEED_DATA_SQL = `-- ==============================================================================
+-- ==============================================================================
 -- CONTOH DATA AWAL (SEED DATA) SISTEM TKA SMKN 1 SONGGOM
 -- Minimal 3 data terisi untuk seluruh tabel utama:
 -- Akun Auth, Profil, Jurusan, Kelas, Mapel, Guru, Siswa, Soal 4 Tipe, Ujian, dan Nilai.
@@ -1455,24 +1457,4 @@ ON CONFLICT (attempt_id, question_id) DO UPDATE SET points_earned = EXCLUDED.poi
 ALTER TABLE IF EXISTS public.exam_attempts ENABLE TRIGGER ALL;
 ALTER TABLE IF EXISTS public.student_answers ENABLE TRIGGER ALL;
 ALTER TABLE IF EXISTS public.profiles ENABLE TRIGGER ALL;
-`;
-
-export const SUPABASE_ALL_MIGRATIONS_SQL = `-- ==============================================================================
--- MASTER SKRIP MIGRASI SUPABASE LENGKAP + CONTOH DATA TERISI (SEED DATA)
--- TES KEMAMPUAN AKADEMIK (TKA) SMKN 1 SONGGOM
--- Dijalankan sekali jalan di: Supabase Dashboard -> SQL Editor -> New Query -> Run
--- ==============================================================================
-
-${SUPABASE_PHASE_1_SQL}
-
-${SUPABASE_PHASE_2_SQL}
-
-${SUPABASE_PHASE_3_SQL}
-
-${SUPABASE_PHASE_4_SQL}
-
-${SUPABASE_PHASE_5_SQL}
-
-${SUPABASE_SEED_DATA_SQL}
-`;
 
