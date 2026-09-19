@@ -117,10 +117,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Login Handler (Otentikasi Nyata via Supabase Auth)
-  const login = async (email: string, password: string): Promise<{ success: boolean; role?: UserRole; error?: string }> => {
+  // Login Handler (Otentikasi Nyata via Supabase Auth mendukung Email, NIS, dan NIP)
+  const login = async (identifier: string, password: string): Promise<{ success: boolean; role?: UserRole; error?: string }> => {
     setError(null);
     setLoading(true);
+    let targetEmail = identifier.trim();
 
     try {
       if (!isSupabaseConfigured) {
@@ -130,18 +131,63 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: false, error: msg };
       }
 
+      // Jika input bukan email (misalnya NIS siswa atau NIP guru), cari alamat email terdaftarnya
+      if (!targetEmail.includes('@')) {
+        try {
+          // Cari di tabel profiles
+          const { data: profileMatch } = await supabase
+            .from('profiles')
+            .select('email')
+            .or(`nis.eq.${targetEmail},nip.eq.${targetEmail}`)
+            .limit(1)
+            .maybeSingle();
+
+          if (profileMatch?.email) {
+            targetEmail = profileMatch.email;
+          } else {
+            // Cari di tabel students jika belum ada di profiles
+            const { data: studentMatch } = await supabase
+              .from('students')
+              .select('email')
+              .eq('nis', targetEmail)
+              .limit(1)
+              .maybeSingle();
+
+            if (studentMatch?.email) {
+              targetEmail = studentMatch.email;
+            } else {
+              // Cari di tabel teachers
+              const { data: teacherMatch } = await supabase
+                .from('teachers')
+                .select('email')
+                .eq('nip', targetEmail)
+                .limit(1)
+                .maybeSingle();
+
+              if (teacherMatch?.email) {
+                targetEmail = teacherMatch.email;
+              }
+            }
+          }
+        } catch (lookupErr) {
+          console.warn('Pencarian NIS/NIP fallback:', lookupErr);
+        }
+      }
+
       // Login nyata ke Supabase Auth
       const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
+        email: targetEmail.toLowerCase(),
         password,
       });
 
       if (authError) {
         let indonesianMessage = authError.message;
         if (authError.message.includes('Invalid login credentials')) {
-          indonesianMessage = 'Email atau password yang Anda masukkan salah.';
+          indonesianMessage = 'Email/NIS/NIP atau kata sandi yang Anda masukkan tidak sesuai.';
         } else if (authError.message.includes('Email not confirmed')) {
-          indonesianMessage = 'Email belum diverifikasi. Silakan cek inbox email Anda.';
+          indonesianMessage = 'Akun belum dikonfirmasi di Supabase Auth. Silakan hubungi admin sekolah atau jalankan fungsi admin_create_user.';
+        } else if (authError.message.includes('rate limit')) {
+          indonesianMessage = 'Batas percobaan login tercapai. Silakan tunggu beberapa saat lagi.';
         }
         setError(indonesianMessage);
         setLoading(false);
@@ -192,7 +238,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       AuditLogger.log({
         action: 'LOGIN',
         entity: 'AuthSystem',
-        userEmail: email,
+        userEmail: targetEmail || identifier,
         details: { method: 'email_password', error: errMsg },
         status: 'BLOCKED',
       });

@@ -24,11 +24,22 @@ export const supabase = createClient(
   }
 );
 
+// Client terisolasi tanpa persistensi sesi lokal (digunakan saat admin membuat akun siswa/guru baru)
+export const createIsolatedAuthClient = () => {
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
+};
+
 // AKUN SEED / DEMO UNTUK PENGUJIAN INSTAN TKA
 export const DEMO_USERS: Record<UserRole, { email: string; password: string; profile: UserProfile }> = {
   admin: {
     email: 'admin@smk.id',
-    password: 'password123',
+    password: 'AdminTKA2026!',
     profile: {
       id: 'd1111111-1111-1111-1111-111111111111',
       email: 'admin@smk.id',
@@ -41,7 +52,7 @@ export const DEMO_USERS: Record<UserRole, { email: string; password: string; pro
   },
   guru: {
     email: 'guru@smk.id',
-    password: 'password123',
+    password: 'GuruTKA2026!',
     profile: {
       id: 'd2222222-2222-2222-2222-222222222222',
       email: 'guru@smk.id',
@@ -56,7 +67,7 @@ export const DEMO_USERS: Record<UserRole, { email: string; password: string; pro
   },
   siswa: {
     email: 'siswa@smk.id',
-    password: 'password123',
+    password: 'SiswaTKA2026!',
     profile: {
       id: 'e1111111-1111-1111-1111-111111111111',
       email: 'siswa@smk.id',

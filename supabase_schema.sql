@@ -22,6 +22,26 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
+-- 0. BERSIHKAN TABEL LAMA YANG KOSONG (AGAR TIDAK TERJADI BENTROK STRUKTUR KOLOM)
+DROP TABLE IF EXISTS public.student_answers CASCADE;
+DROP TABLE IF EXISTS public.exam_attempts CASCADE;
+DROP TABLE IF EXISTS public.exam_assignments CASCADE;
+DROP TABLE IF EXISTS public.exam_questions CASCADE;
+DROP TABLE IF EXISTS public.exams CASCADE;
+DROP TABLE IF EXISTS public.matching_pairs CASCADE;
+DROP TABLE IF EXISTS public.question_answers CASCADE;
+DROP TABLE IF EXISTS public.question_options CASCADE;
+DROP TABLE IF EXISTS public.questions CASCADE;
+DROP TABLE IF EXISTS public.students CASCADE;
+DROP TABLE IF EXISTS public.teacher_subjects CASCADE;
+DROP TABLE IF EXISTS public.teachers CASCADE;
+DROP TABLE IF EXISTS public.subjects CASCADE;
+DROP TABLE IF EXISTS public.classes CASCADE;
+DROP TABLE IF EXISTS public.majors CASCADE;
+DROP TABLE IF EXISTS public.profiles CASCADE;
+DROP TABLE IF EXISTS public.grade_category_configs CASCADE;
+DROP TABLE IF EXISTS public.audit_logs CASCADE;
+
 -- 2. TIPE ENUM ROLE
 DO $$ BEGIN
     CREATE TYPE user_role AS ENUM ('admin', 'guru', 'siswa');
@@ -699,10 +719,10 @@ ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, status = EXCLUDED
 -- 23.7 SEED GRADE CATEGORY CONFIGS (PREDIKAT NILAI)
 INSERT INTO public.grade_category_configs (id, min_score, max_score, code, label, badge_class, color, order_num, description)
 VALUES
-    ('gc111111-1111-1111-1111-111111111111', 90.00, 100.00, 'A', 'Sangat Baik', 'bg-emerald-100 text-emerald-800 border-emerald-300', '#059669', 1, 'Menguasai seluruh kompetensi kejuruan dengan predikat istimewa.'),
-    ('gc222222-2222-2222-2222-222222222222', 80.00, 89.99, 'B', 'Baik', 'bg-blue-100 text-blue-800 border-blue-300', '#2563eb', 2, 'Menguasai kompetensi kejuruan dengan tuntas.'),
-    ('gc333333-3333-3333-3333-333333333333', 70.00, 79.99, 'C', 'Cukup', 'bg-amber-100 text-amber-800 border-amber-300', '#d97706', 3, 'Memenuhi standar minimal KKM dengan pendampingan.'),
-    ('gc444444-4444-4444-4444-444444444444', 0.00, 69.99, 'D', 'Perlu Bimbingan', 'bg-rose-100 text-rose-800 border-rose-300', '#e11d48', 4, 'Belum tuntas, wajib mengikuti program remedial.')
+    ('0c111111-1111-1111-1111-111111111111', 90.00, 100.00, 'A', 'Sangat Baik', 'bg-emerald-100 text-emerald-800 border-emerald-300', '#059669', 1, 'Menguasai seluruh kompetensi kejuruan dengan predikat istimewa.'),
+    ('0c222222-2222-2222-2222-222222222222', 80.00, 89.99, 'B', 'Baik', 'bg-blue-100 text-blue-800 border-blue-300', '#2563eb', 2, 'Menguasai kompetensi kejuruan dengan tuntas.'),
+    ('0c333333-3333-3333-3333-333333333333', 70.00, 79.99, 'C', 'Cukup', 'bg-amber-100 text-amber-800 border-amber-300', '#d97706', 3, 'Memenuhi standar minimal KKM dengan pendampingan.'),
+    ('0c444444-4444-4444-4444-444444444444', 0.00, 69.99, 'D', 'Perlu Bimbingan', 'bg-rose-100 text-rose-800 border-rose-300', '#e11d48', 4, 'Belum tuntas, wajib mengikuti program remedial.')
 ON CONFLICT (id) DO UPDATE SET label = EXCLUDED.label, min_score = EXCLUDED.min_score, max_score = EXCLUDED.max_score;
 
 -- 23.8 SEED QUESTIONS (4 TIPE SOAL: PG BIASA, PG KOMPLEKS, MENJODOHKAN, ESAI)
@@ -772,25 +792,25 @@ ON CONFLICT (id) DO UPDATE SET question_text = EXCLUDED.question_text, status = 
 -- 23.9 SEED QUESTION_OPTIONS (UNTUK SOAL PG BIASA & PG KOMPLEKS)
 INSERT INTO public.question_options (id, question_id, option_key, option_text, is_correct, order_num)
 VALUES
-    ('o1111111-1111-1111-1111-111111111111', 'f1111111-1111-1111-1111-111111111111', 'A', 'DHCP Server', false, 1),
-    ('o1111111-1111-1111-1111-111111111112', 'f1111111-1111-1111-1111-111111111111', 'B', 'NAT (Network Address Translation)', true, 2),
-    ('o1111111-1111-1111-1111-111111111113', 'f1111111-1111-1111-1111-111111111111', 'C', 'DNS Resolver', false, 3),
-    ('o1111111-1111-1111-1111-111111111114', 'f1111111-1111-1111-1111-111111111111', 'D', 'Proxy Server Squid', false, 4),
-    ('o1111111-1111-1111-1111-111111111115', 'f1111111-1111-1111-1111-111111111111', 'E', 'NTP Client Sync', false, 5),
-    ('o2222222-2222-2222-2222-222222222221', 'f2222222-2222-2222-2222-222222222222', 'A', 'Mempersempit domain broadcast jaringan lokal', true, 1),
-    ('o2222222-2222-2222-2222-222222222222', 'f2222222-2222-2222-2222-222222222222', 'B', 'Meningkatkan keamanan dengan segmentasi logis antar departemen', true, 2),
-    ('o2222222-2222-2222-2222-222222222223', 'f2222222-2222-2222-2222-222222222222', 'C', 'Menggantikan fungsi kabel fisik menjadi sepenuhnya nirkabel', false, 3),
-    ('o2222222-2222-2222-2222-222222222224', 'f2222222-2222-2222-2222-222222222222', 'D', 'Memudahkan manajemen jaringan tanpa merombak kabel fisik', true, 4),
-    ('o2222222-2222-2222-2222-222222222225', 'f2222222-2222-2222-2222-222222222222', 'E', 'Otomatis memperbesar kapasitas kecepatan ISP sekolah 10x lipat', false, 5)
+    ('0b111111-1111-1111-1111-111111111111', 'f1111111-1111-1111-1111-111111111111', 'A', 'DHCP Server', false, 1),
+    ('0b111111-1111-1111-1111-111111111112', 'f1111111-1111-1111-1111-111111111111', 'B', 'NAT (Network Address Translation)', true, 2),
+    ('0b111111-1111-1111-1111-111111111113', 'f1111111-1111-1111-1111-111111111111', 'C', 'DNS Resolver', false, 3),
+    ('0b111111-1111-1111-1111-111111111114', 'f1111111-1111-1111-1111-111111111111', 'D', 'Proxy Server Squid', false, 4),
+    ('0b111111-1111-1111-1111-111111111115', 'f1111111-1111-1111-1111-111111111111', 'E', 'NTP Client Sync', false, 5),
+    ('0b222222-2222-2222-2222-222222222221', 'f2222222-2222-2222-2222-222222222222', 'A', 'Mempersempit domain broadcast jaringan lokal', true, 1),
+    ('0b222222-2222-2222-2222-222222222222', 'f2222222-2222-2222-2222-222222222222', 'B', 'Meningkatkan keamanan dengan segmentasi logis antar departemen', true, 2),
+    ('0b222222-2222-2222-2222-222222222223', 'f2222222-2222-2222-2222-222222222222', 'C', 'Menggantikan fungsi kabel fisik menjadi sepenuhnya nirkabel', false, 3),
+    ('0b222222-2222-2222-2222-222222222224', 'f2222222-2222-2222-2222-222222222222', 'D', 'Memudahkan manajemen jaringan tanpa merombak kabel fisik', true, 4),
+    ('0b222222-2222-2222-2222-222222222225', 'f2222222-2222-2222-2222-222222222222', 'E', 'Otomatis memperbesar kapasitas kecepatan ISP sekolah 10x lipat', false, 5)
 ON CONFLICT (id) DO UPDATE SET option_text = EXCLUDED.option_text, is_correct = EXCLUDED.is_correct;
 
 -- 23.10 SEED MATCHING_PAIRS
 INSERT INTO public.matching_pairs (id, question_id, left_item, right_item, correct_match_key, order_num)
 VALUES
-    ('m1111111-1111-1111-1111-111111111111', 'f3333333-3333-3333-3333-333333333333', 'Port 80', 'HTTP', 'HTTP', 1),
-    ('m1111111-1111-1111-1111-111111111112', 'f3333333-3333-3333-3333-333333333333', 'Port 443', 'HTTPS', 'HTTPS', 2),
-    ('m1111111-1111-1111-1111-111111111113', 'f3333333-3333-3333-3333-333333333333', 'Port 22', 'SSH', 'SSH', 3),
-    ('m1111111-1111-1111-1111-111111111114', 'f3333333-3333-3333-3333-333333333333', 'Port 53', 'DNS', 'DNS', 4)
+    ('0d111111-1111-1111-1111-111111111111', 'f3333333-3333-3333-3333-333333333333', 'Port 80', 'HTTP', 'HTTP', 1),
+    ('0d111111-1111-1111-1111-111111111112', 'f3333333-3333-3333-3333-333333333333', 'Port 443', 'HTTPS', 'HTTPS', 2),
+    ('0d111111-1111-1111-1111-111111111113', 'f3333333-3333-3333-3333-333333333333', 'Port 22', 'SSH', 'SSH', 3),
+    ('0d111111-1111-1111-1111-111111111114', 'f3333333-3333-3333-3333-333333333333', 'Port 53', 'DNS', 'DNS', 4)
 ON CONFLICT (id) DO UPDATE SET left_item = EXCLUDED.left_item, right_item = EXCLUDED.right_item;
 
 -- 23.11 SEED QUESTION_ANSWERS (KUNCI JAWABAN ESAI)
@@ -837,16 +857,16 @@ ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, status = EXCLUDED.status;
 -- 23.13 SEED EXAM_QUESTIONS
 INSERT INTO public.exam_questions (id, exam_id, question_id, order_num, points)
 VALUES
-    ('eq111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111111', 'f1111111-1111-1111-1111-111111111111', 1, 25.00),
-    ('eq222222-2222-2222-2222-222222222222', '11111111-1111-1111-1111-111111111111', 'f2222222-2222-2222-2222-222222222222', 2, 25.00),
-    ('eq333333-3333-3333-3333-333333333333', '11111111-1111-1111-1111-111111111111', 'f3333333-3333-3333-3333-333333333333', 3, 25.00),
-    ('eq444444-4444-4444-4444-444444444444', '11111111-1111-1111-1111-111111111111', 'f4444444-4444-4444-4444-444444444444', 4, 25.00)
+    ('0e111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111111', 'f1111111-1111-1111-1111-111111111111', 1, 25.00),
+    ('0e222222-2222-2222-2222-222222222222', '11111111-1111-1111-1111-111111111111', 'f2222222-2222-2222-2222-222222222222', 2, 25.00),
+    ('0e333333-3333-3333-3333-333333333333', '11111111-1111-1111-1111-111111111111', 'f3333333-3333-3333-3333-333333333333', 3, 25.00),
+    ('0e444444-4444-4444-4444-444444444444', '11111111-1111-1111-1111-111111111111', 'f4444444-4444-4444-4444-444444444444', 4, 25.00)
 ON CONFLICT (exam_id, question_id) DO UPDATE SET points = EXCLUDED.points;
 
 -- 23.14 SEED EXAM_ASSIGNMENTS (KELAS XI TJKT 1)
 INSERT INTO public.exam_assignments (id, exam_id, class_id, can_take)
 VALUES
-    ('ea111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111111', 'b2222222-2222-2222-2222-222222222222', true)
+    ('0a111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111111', 'b2222222-2222-2222-2222-222222222222', true)
 ON CONFLICT (id) DO NOTHING;
 
 -- ==============================================================================
@@ -1021,6 +1041,199 @@ BEGIN
     UPDATE public.students SET user_id = v_siswa_id WHERE email = 'siswa@smk.id';
 
 END $$;
+
+-- ==============================================================================
+-- 24. FUNGSI ADMIN: BUAT DAN RESET USER SECARA LANGSUNG
+-- ==============================================================================
+CREATE OR REPLACE FUNCTION public.admin_create_user(
+    p_email TEXT,
+    p_password TEXT,
+    p_full_name TEXT,
+    p_role TEXT,
+    p_phone TEXT DEFAULT NULL,
+    p_nis TEXT DEFAULT NULL,
+    p_nisn TEXT DEFAULT NULL,
+    p_nip TEXT DEFAULT NULL,
+    p_class_id UUID DEFAULT NULL,
+    p_major_id UUID DEFAULT NULL,
+    p_subject_ids UUID[] DEFAULT '{}'
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_user_id UUID;
+    v_major_id UUID := p_major_id;
+    v_class_name TEXT := NULL;
+    v_major_name TEXT := NULL;
+BEGIN
+    IF p_email IS NULL OR p_email = '' THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Email tidak boleh kosong');
+    END IF;
+
+    IF p_password IS NULL OR length(p_password) < 6 THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Kata sandi minimal 6 karakter');
+    END IF;
+
+    IF p_class_id IS NOT NULL THEN
+        SELECT c.name, m.name, c.major_id 
+        INTO v_class_name, v_major_name, v_major_id
+        FROM public.classes c
+        LEFT JOIN public.majors m ON m.id = c.major_id
+        WHERE c.id = p_class_id;
+    END IF;
+
+    SELECT id INTO v_user_id FROM auth.users WHERE LOWER(email) = LOWER(p_email);
+
+    IF v_user_id IS NULL THEN
+        v_user_id := gen_random_uuid();
+        INSERT INTO auth.users (
+            id, instance_id, aud, role, email, encrypted_password,
+            email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
+            created_at, updated_at, confirmation_token, recovery_token, email_change_token_new, email_change
+        ) VALUES (
+            v_user_id,
+            '00000000-0000-0000-0000-000000000000',
+            'authenticated',
+            'authenticated',
+            LOWER(p_email),
+            crypt(p_password, gen_salt('bf')),
+            NOW(),
+            '{"provider":"email","providers":["email"]}'::jsonb,
+            jsonb_build_object('full_name', p_full_name, 'role', p_role, 'nis', p_nis, 'nip', p_nip),
+            NOW(), NOW(), '', '', '', ''
+        );
+    ELSE
+        UPDATE auth.users 
+        SET encrypted_password = crypt(p_password, gen_salt('bf')),
+            email_confirmed_at = COALESCE(email_confirmed_at, NOW()),
+            raw_user_meta_data = jsonb_build_object('full_name', p_full_name, 'role', p_role, 'nis', p_nis, 'nip', p_nip),
+            updated_at = NOW()
+        WHERE id = v_user_id;
+    END IF;
+
+    INSERT INTO public.profiles (
+        id, email, full_name, role, phone_number,
+        nis, nisn, nip, class_name, major_name, status, updated_at
+    ) VALUES (
+        v_user_id, LOWER(p_email), p_full_name, p_role, p_phone,
+        p_nis, p_nisn, p_nip, v_class_name, v_major_name, 'active', NOW()
+    )
+    ON CONFLICT (id) DO UPDATE SET
+        email = EXCLUDED.email,
+        full_name = EXCLUDED.full_name,
+        role = EXCLUDED.role,
+        phone_number = COALESCE(EXCLUDED.phone_number, public.profiles.phone_number),
+        nis = COALESCE(EXCLUDED.nis, public.profiles.nis),
+        nisn = COALESCE(EXCLUDED.nisn, public.profiles.nisn),
+        nip = COALESCE(EXCLUDED.nip, public.profiles.nip),
+        class_name = COALESCE(EXCLUDED.class_name, public.profiles.class_name),
+        major_name = COALESCE(EXCLUDED.major_name, public.profiles.major_name),
+        status = 'active',
+        updated_at = NOW();
+
+    IF p_role = 'siswa' THEN
+        INSERT INTO public.students (
+            id, user_id, nis, nisn, full_name, email, phone_number, class_id, major_id, status
+        ) VALUES (
+            v_user_id, v_user_id, COALESCE(p_nis, 'S-' || substr(v_user_id::text, 1, 6)),
+            COALESCE(p_nisn, '00' || substr(v_user_id::text, 1, 8)),
+            p_full_name, LOWER(p_email), p_phone, p_class_id, v_major_id, 'active'
+        )
+        ON CONFLICT (id) DO UPDATE SET
+            user_id = v_user_id,
+            full_name = EXCLUDED.full_name,
+            email = EXCLUDED.email,
+            class_id = COALESCE(EXCLUDED.class_id, public.students.class_id),
+            major_id = COALESCE(EXCLUDED.major_id, public.students.major_id),
+            phone_number = COALESCE(EXCLUDED.phone_number, public.students.phone_number),
+            status = 'active';
+
+        UPDATE public.students SET user_id = v_user_id WHERE LOWER(email) = LOWER(p_email) AND id <> v_user_id;
+
+    ELSIF p_role = 'guru' THEN
+        INSERT INTO public.teachers (
+            id, user_id, nip, full_name, email, phone_number, status
+        ) VALUES (
+            v_user_id, v_user_id, COALESCE(p_nip, 'G-' || substr(v_user_id::text, 1, 8)),
+            p_full_name, LOWER(p_email), p_phone, 'active'
+        )
+        ON CONFLICT (id) DO UPDATE SET
+            user_id = v_user_id,
+            full_name = EXCLUDED.full_name,
+            email = EXCLUDED.email,
+            phone_number = COALESCE(EXCLUDED.phone_number, public.teachers.phone_number),
+            status = 'active';
+
+        IF p_subject_ids IS NOT NULL AND array_length(p_subject_ids, 1) > 0 THEN
+            DELETE FROM public.teacher_subjects WHERE teacher_id = v_user_id;
+            INSERT INTO public.teacher_subjects (teacher_id, subject_id)
+            SELECT v_user_id, unnest(p_subject_ids)
+            ON CONFLICT DO NOTHING;
+        END IF;
+    END IF;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'user_id', v_user_id,
+        'email', LOWER(p_email),
+        'role', p_role
+    );
+EXCEPTION WHEN OTHERS THEN
+    RETURN jsonb_build_object('success', false, 'error', SQLERRM);
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.admin_reset_user_password(
+    p_identifier TEXT,
+    p_new_password TEXT
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_user_id UUID;
+    v_email TEXT;
+BEGIN
+    IF p_new_password IS NULL OR length(p_new_password) < 6 THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Kata sandi baru minimal 6 karakter');
+    END IF;
+
+    SELECT id, email INTO v_user_id, v_email FROM auth.users 
+    WHERE LOWER(email) = LOWER(p_identifier) OR id::text = p_identifier
+    LIMIT 1;
+
+    IF v_user_id IS NULL THEN
+        SELECT id, email INTO v_user_id, v_email FROM public.profiles 
+        WHERE nis = p_identifier OR nip = p_identifier
+        LIMIT 1;
+    END IF;
+
+    IF v_user_id IS NULL THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Akun tidak ditemukan untuk: ' || p_identifier);
+    END IF;
+
+    UPDATE auth.users 
+    SET encrypted_password = crypt(p_new_password, gen_salt('bf')),
+        email_confirmed_at = COALESCE(email_confirmed_at, NOW()),
+        updated_at = NOW()
+    WHERE id = v_user_id;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'user_id', v_user_id,
+        'email', v_email,
+        'message', 'Kata sandi berhasil diperbarui'
+    );
+EXCEPTION WHEN OTHERS THEN
+    RETURN jsonb_build_object('success', false, 'error', SQLERRM);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.admin_create_user TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.admin_reset_user_password TO anon, authenticated, service_role;
 
 -- Selesai!
 SELECT 'SKRIP DATABASE TKA SMKN 1 SONGGOM DAN AKUN PENGGUNA RESMI BERHASIL DIBUAT 100% SUKSES!' AS status;

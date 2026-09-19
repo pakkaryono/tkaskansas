@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Major, SchoolClass, Subject, Teacher, Student } from '../types';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { supabase, isSupabaseConfigured, createIsolatedAuthClient } from '../lib/supabase';
 import { SIMULATION_10_STUDENTS } from '../data/simulationSeed';
 import { generateUUID } from '../lib/utils';
 
@@ -639,54 +639,87 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     initialPassword?: string;
   }): Promise<Teacher> => {
     const newId = crypto.randomUUID();
+    const effectivePassword = data.initialPassword || `Guru123!`;
     const newTeacher: Teacher = {
       id: newId,
-      nip: data.nip,
-      full_name: data.full_name,
-      email: data.email,
-      phone_number: data.phone_number,
+      nip: data.nip.trim(),
+      full_name: data.full_name.trim(),
+      email: data.email.trim().toLowerCase(),
+      phone_number: data.phone_number?.trim(),
       status: 'active',
       subject_ids: data.subject_ids || [],
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
 
-    // Keamanan Supabase Auth: Buat akun tanpa menyimpan password plaintext di database
     if (isSupabaseConfigured && supabase) {
       try {
-        // Daftarkan akun auth untuk guru dengan metadata peran 'guru'
-        const tempPassword = data.initialPassword || `Guru#${data.nip.slice(-4)}${Math.floor(100 + Math.random() * 900)}`;
-        await supabase.auth.signUp({
-          email: data.email,
-          password: tempPassword,
-          options: {
-            data: {
-              full_name: data.full_name,
-              role: 'guru',
-              nip: data.nip,
-            },
-          },
+        // 1. Coba panggil RPC admin_create_user (instan aktif, tanpa batasan rate limit email)
+        const { data: rpcRes, error: rpcErr } = await supabase.rpc('admin_create_user', {
+          p_email: newTeacher.email,
+          p_password: effectivePassword,
+          p_full_name: newTeacher.full_name,
+          p_role: 'guru',
+          p_phone: newTeacher.phone_number || null,
+          p_nip: newTeacher.nip,
+          p_subject_ids: data.subject_ids || [],
         });
 
-        // Simpan ke tabel teachers
-        await supabase.from('teachers').insert([
-          {
-            id: newId,
-            nip: data.nip,
-            full_name: data.full_name,
-            email: data.email,
-            phone_number: data.phone_number,
-            status: 'active',
-          },
-        ]);
+        if (rpcErr || (rpcRes && !rpcRes.success)) {
+          console.warn('RPC admin_create_user guru notice, menggunakan fallback:', rpcErr?.message || rpcRes?.error);
 
-        // Simpan relasi mata pelajaran ke teacher_subjects
-        if (data.subject_ids && data.subject_ids.length > 0) {
-          const relationRows = data.subject_ids.map((subId) => ({
-            teacher_id: newId,
-            subject_id: subId,
-          }));
-          await supabase.from('teacher_subjects').insert(relationRows);
+          // Fallback dengan isolated client agar sesi admin tidak tertimpa
+          try {
+            const isolatedClient = createIsolatedAuthClient();
+            await isolatedClient.auth.signUp({
+              email: newTeacher.email,
+              password: effectivePassword,
+              options: {
+                data: {
+                  full_name: newTeacher.full_name,
+                  role: 'guru',
+                  nip: newTeacher.nip,
+                },
+              },
+            });
+          } catch (signupErr) {
+            console.warn('Isolated signup guru notice:', signupErr);
+          }
+
+          // Simpan ke tabel teachers
+          await supabase.from('teachers').upsert([
+            {
+              id: newId,
+              nip: newTeacher.nip,
+              full_name: newTeacher.full_name,
+              email: newTeacher.email,
+              phone_number: newTeacher.phone_number || null,
+              status: 'active',
+            },
+          ]);
+
+          // Simpan relasi mata pelajaran ke teacher_subjects
+          if (data.subject_ids && data.subject_ids.length > 0) {
+            await supabase.from('teacher_subjects').delete().eq('teacher_id', newId);
+            const relationRows = data.subject_ids.map((subId) => ({
+              teacher_id: newId,
+              subject_id: subId,
+            }));
+            await supabase.from('teacher_subjects').insert(relationRows);
+          }
+
+          // Simpan ke tabel profiles
+          await supabase.from('profiles').upsert([
+            {
+              id: newId,
+              email: newTeacher.email,
+              full_name: newTeacher.full_name,
+              role: 'guru',
+              nip: newTeacher.nip,
+              phone_number: newTeacher.phone_number || null,
+              status: 'active',
+            },
+          ]);
         }
       } catch (e) {
         console.warn('Supabase teacher creation notice:', e);
@@ -718,6 +751,16 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             }));
             await supabase.from('teacher_subjects').insert(rows);
           }
+        }
+
+        // Sinkronisasi profil
+        if (teacherFields.full_name || teacherFields.email || teacherFields.phone_number) {
+          await supabase.from('profiles').update({
+            ...(teacherFields.full_name ? { full_name: teacherFields.full_name } : {}),
+            ...(teacherFields.email ? { email: teacherFields.email } : {}),
+            ...(teacherFields.phone_number ? { phone_number: teacherFields.phone_number } : {}),
+            updated_at: new Date().toISOString(),
+          }).eq('id', id);
         }
       } catch (e) {
         console.warn('Supabase update notice:', e);
@@ -765,14 +808,21 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const resetTeacherPassword = async (id: string, customPassword?: string): Promise<string> => {
     const teacher = teachers.find((t) => t.id === id);
-    const newPass = customPassword || `GuruSonggom#${Math.floor(1000 + Math.random() * 9000)}`;
+    const newPass = customPassword || `Guru123!`;
 
-    if (isSupabaseConfigured && supabase && teacher?.email) {
+    if (isSupabaseConfigured && supabase && teacher) {
       try {
-        // Kirim link reset password yang aman via Supabase Auth
-        await supabase.auth.resetPasswordForEmail(teacher.email, {
-          redirectTo: `${window.location.origin}/login`,
+        // Coba panggil RPC reset password langsung
+        const { data: rpcRes, error: rpcErr } = await supabase.rpc('admin_reset_user_password', {
+          p_identifier: teacher.email || teacher.nip,
+          p_new_password: newPass,
         });
+
+        if (rpcErr && teacher.email) {
+          await supabase.auth.resetPasswordForEmail(teacher.email, {
+            redirectTo: `${window.location.origin}/login`,
+          });
+        }
       } catch (e) {
         console.warn('Supabase password reset notice:', e);
       }
@@ -788,20 +838,24 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     full_name: string;
     email: string;
     class_id: string;
-    major_id: string;
+    major_id?: string;
     phone_number?: string;
     initialPassword?: string;
   }): Promise<Student> => {
     const newId = crypto.randomUUID();
+    const effectivePassword = data.initialPassword || `Siswa123!`;
+    const selectedClass = classes.find((c) => c.id === data.class_id);
+    const resolvedMajorId = data.major_id || selectedClass?.major_id || '';
+
     const newStudent: Student = {
       id: newId,
-      nis: data.nis,
-      nisn: data.nisn,
-      full_name: data.full_name,
-      email: data.email,
+      nis: data.nis.trim(),
+      nisn: data.nisn.trim(),
+      full_name: data.full_name.trim(),
+      email: data.email.trim().toLowerCase(),
       class_id: data.class_id,
-      major_id: data.major_id,
-      phone_number: data.phone_number,
+      major_id: resolvedMajorId,
+      phone_number: data.phone_number?.trim(),
       status: 'active',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -809,33 +863,70 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const tempPassword = data.initialPassword || `Siswa#${data.nis}${Math.floor(10 + Math.random() * 90)}`;
-        await supabase.auth.signUp({
-          email: data.email,
-          password: tempPassword,
-          options: {
-            data: {
-              full_name: data.full_name,
-              role: 'siswa',
-              nis: data.nis,
-              nisn: data.nisn,
-            },
-          },
+        // 1. Coba panggil RPC admin_create_user (instan terkonfirmasi tanpa rate limit email)
+        const { data: rpcRes, error: rpcErr } = await supabase.rpc('admin_create_user', {
+          p_email: newStudent.email,
+          p_password: effectivePassword,
+          p_full_name: newStudent.full_name,
+          p_role: 'siswa',
+          p_phone: newStudent.phone_number || null,
+          p_nis: newStudent.nis,
+          p_nisn: newStudent.nisn,
+          p_class_id: data.class_id,
+          p_major_id: resolvedMajorId || null,
         });
 
-        await supabase.from('students').insert([
-          {
-            id: newId,
-            nis: data.nis,
-            nisn: data.nisn,
-            full_name: data.full_name,
-            email: data.email,
-            phone_number: data.phone_number,
-            class_id: data.class_id,
-            major_id: data.major_id,
-            status: 'active',
-          },
-        ]);
+        if (rpcErr || (rpcRes && !rpcRes.success)) {
+          console.warn('RPC admin_create_user siswa notice, menggunakan fallback:', rpcErr?.message || rpcRes?.error);
+
+          // Fallback isolated client agar sesi admin tidak tertimpa
+          try {
+            const isolatedClient = createIsolatedAuthClient();
+            await isolatedClient.auth.signUp({
+              email: newStudent.email,
+              password: effectivePassword,
+              options: {
+                data: {
+                  full_name: newStudent.full_name,
+                  role: 'siswa',
+                  nis: newStudent.nis,
+                  nisn: newStudent.nisn,
+                },
+              },
+            });
+          } catch (signupErr) {
+            console.warn('Isolated signup siswa notice:', signupErr);
+          }
+
+          // Simpan ke tabel students
+          await supabase.from('students').upsert([
+            {
+              id: newId,
+              nis: newStudent.nis,
+              nisn: newStudent.nisn,
+              full_name: newStudent.full_name,
+              email: newStudent.email,
+              phone_number: newStudent.phone_number || null,
+              class_id: newStudent.class_id,
+              major_id: newStudent.major_id || null,
+              status: 'active',
+            },
+          ]);
+
+          // Simpan ke tabel profiles
+          await supabase.from('profiles').upsert([
+            {
+              id: newId,
+              email: newStudent.email,
+              full_name: newStudent.full_name,
+              role: 'siswa',
+              nis: newStudent.nis,
+              nisn: newStudent.nisn,
+              phone_number: newStudent.phone_number || null,
+              status: 'active',
+            },
+          ]);
+        }
       } catch (e) {
         console.warn('Supabase student creation notice:', e);
       }
@@ -854,6 +945,18 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     if (isSupabaseConfigured && supabase) {
       try {
         await supabase.from('students').update(updatedData).eq('id', id);
+
+        // Perbarui juga data di profiles
+        if (updates.full_name || updates.email || updates.phone_number || updates.nis || updates.nisn) {
+          await supabase.from('profiles').update({
+            ...(updates.full_name ? { full_name: updates.full_name } : {}),
+            ...(updates.email ? { email: updates.email } : {}),
+            ...(updates.phone_number ? { phone_number: updates.phone_number } : {}),
+            ...(updates.nis ? { nis: updates.nis } : {}),
+            ...(updates.nisn ? { nisn: updates.nisn } : {}),
+            updated_at: new Date().toISOString(),
+          }).eq('id', id);
+        }
       } catch (e) {
         console.warn('Supabase student update notice:', e);
       }
@@ -895,15 +998,22 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const resetStudentPassword = async (id: string, customPassword?: string): Promise<string> => {
     const student = students.find((s) => s.id === id);
-    const newPass = customPassword || `SiswaSonggom#${Math.floor(1000 + Math.random() * 9000)}`;
+    const newPass = customPassword || `Siswa123!`;
 
-    if (isSupabaseConfigured && supabase && student?.email) {
+    if (isSupabaseConfigured && supabase && student) {
       try {
-        await supabase.auth.resetPasswordForEmail(student.email, {
-          redirectTo: `${window.location.origin}/login`,
+        const { data: rpcRes, error: rpcErr } = await supabase.rpc('admin_reset_user_password', {
+          p_identifier: student.email || student.nis,
+          p_new_password: newPass,
         });
+
+        if (rpcErr && student.email) {
+          await supabase.auth.resetPasswordForEmail(student.email, {
+            redirectTo: `${window.location.origin}/login`,
+          });
+        }
       } catch (e) {
-        console.warn('Supabase reset password notice:', e);
+        console.warn('Supabase password reset notice:', e);
       }
     }
 

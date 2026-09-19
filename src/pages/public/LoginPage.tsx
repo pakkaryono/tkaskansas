@@ -87,7 +87,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
             <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-100 text-xs text-blue-900 flex items-start gap-2.5">
               <Shield className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
               <p className="text-[12px] leading-relaxed text-blue-800">
-                Silakan masuk menggunakan alamat email dan kata sandi akun resmi Anda yang telah didaftarkan dalam sistem basis data sekolah (Admin, Guru, atau Siswa).
+                Silakan masuk menggunakan <strong>Email resmi</strong> atau <strong>NIS / NIP</strong> beserta kata sandi yang telah didaftarkan dalam sistem basis data sekolah.
               </p>
             </div>
 
@@ -106,16 +106,16 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Email / Username
+                  Email / NIS Siswa / NIP Guru
                 </label>
                 <input
-                  type="email"
+                  type="text"
                   value={email}
                   onChange={(e) => {
                     clearError();
                     setEmail(e.target.value);
                   }}
-                  placeholder="nama@smkn1songgom.sch.id / email terdaftar"
+                  placeholder="Contoh: 21001 (NIS) atau nama@smk.id"
                   required
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all"
                 />
