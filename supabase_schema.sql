@@ -850,36 +850,48 @@ VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- ==============================================================================
--- 24. PANDUAN PENYIAPAN AKUN LOGIN DI AUTH.USERS SUPABASE
+-- 24. PEMBUATAN AKUN PENGGUNA RESMI DI AUTH.USERS & PUBLIC.PROFILES SECARA LANGSUNG
 -- ==============================================================================
--- Untuk menghubungkan pengguna ke auth.users, Anda dapat menambahkan pengguna di:
--- Supabase Dashboard -> Authentication -> Users -> Add User -> Create User
---
--- Contoh akun yang siap didaftarkan:
--- 1. Admin: admin@smk.id
--- 2. Guru : guru@smk.id
--- 3. Siswa: siswa@smk.id
---
--- Trigger otomatis profil saat user dibuat di Supabase Auth (dijalankan jika izin tersedia):
+-- Memperbaiki fungsi trigger auth agar tidak pernah menggagalkan pendaftaran Supabase Auth
 CREATE OR REPLACE FUNCTION public.handle_new_auth_user()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER 
+SECURITY DEFINER
+SET search_path = public
+LANGUAGE plpgsql
+AS $$
 BEGIN
-    INSERT INTO public.profiles (id, email, full_name, role)
+    INSERT INTO public.profiles (
+        id, 
+        email, 
+        full_name, 
+        role, 
+        status,
+        created_at,
+        updated_at
+    )
     VALUES (
         NEW.id,
         NEW.email,
         COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1)),
-        COALESCE(NEW.raw_user_meta_data->>'role', 'siswa')
+        COALESCE(NEW.raw_user_meta_data->>'role', 'siswa'),
+        'active',
+        NOW(),
+        NOW()
     )
     ON CONFLICT (id) DO UPDATE
     SET email = EXCLUDED.email,
         full_name = COALESCE(EXCLUDED.full_name, public.profiles.full_name);
     RETURN NEW;
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
 
 DO $$ BEGIN
     DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+    DROP TRIGGER IF EXISTS trg_handle_new_user ON auth.users;
+    DROP TRIGGER IF EXISTS handle_new_user_trigger ON auth.users;
     CREATE TRIGGER on_auth_user_created
       AFTER INSERT ON auth.users
       FOR EACH ROW EXECUTE FUNCTION public.handle_new_auth_user();
@@ -888,5 +900,127 @@ EXCEPTION
         RAISE NOTICE 'Trigger auth.users dilewati (dikelola oleh Supabase Auth): %', SQLERRM;
 END $$;
 
+-- 24.2 PROVISI LANGSUNG AKUN-AKUN RESMI KE DALAM AUTH.USERS
+DO $$
+DECLARE
+    v_admin_id UUID := '00000000-0000-0000-0000-000000000001';
+    v_admin2_id UUID := '00000000-0000-0000-0000-000000000002';
+    v_guru_id UUID := '00000000-0000-0000-0000-000000000003';
+    v_siswa_id UUID := '00000000-0000-0000-0000-000000000004';
+BEGIN
+    -- 1. AKUN ADMIN UTAMA: karyono621@guru.smk.belajar.id (Password: AdminTKA2026!)
+    IF NOT EXISTS (SELECT 1 FROM auth.users WHERE email = 'karyono621@guru.smk.belajar.id') THEN
+        INSERT INTO auth.users (
+            id, instance_id, aud, role, email, encrypted_password,
+            email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
+            created_at, updated_at, confirmation_token, recovery_token, email_change_token_new, email_change
+        ) VALUES (
+            v_admin_id,
+            '00000000-0000-0000-0000-000000000000',
+            'authenticated',
+            'authenticated',
+            'karyono621@guru.smk.belajar.id',
+            crypt('AdminTKA2026!', gen_salt('bf')),
+            NOW(),
+            '{"provider":"email","providers":["email"]}'::jsonb,
+            '{"full_name":"Karyono (Administrator TKA)","role":"admin"}'::jsonb,
+            NOW(), NOW(), '', '', '', ''
+        );
+    ELSE
+        SELECT id INTO v_admin_id FROM auth.users WHERE email = 'karyono621@guru.smk.belajar.id';
+        UPDATE auth.users SET encrypted_password = crypt('AdminTKA2026!', gen_salt('bf')) WHERE id = v_admin_id;
+    END IF;
+
+    INSERT INTO public.profiles (id, email, full_name, role, status)
+    VALUES (v_admin_id, 'karyono621@guru.smk.belajar.id', 'Karyono (Administrator TKA)', 'admin', 'active')
+    ON CONFLICT (id) DO UPDATE SET role = 'admin', status = 'active';
+
+    -- 2. AKUN ADMIN SEKOLAH: admin@smk.id (Password: AdminTKA2026!)
+    IF NOT EXISTS (SELECT 1 FROM auth.users WHERE email = 'admin@smk.id') THEN
+        INSERT INTO auth.users (
+            id, instance_id, aud, role, email, encrypted_password,
+            email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
+            created_at, updated_at, confirmation_token, recovery_token, email_change_token_new, email_change
+        ) VALUES (
+            v_admin2_id,
+            '00000000-0000-0000-0000-000000000000',
+            'authenticated',
+            'authenticated',
+            'admin@smk.id',
+            crypt('AdminTKA2026!', gen_salt('bf')),
+            NOW(),
+            '{"provider":"email","providers":["email"]}'::jsonb,
+            '{"full_name":"Administrator SMKN 1 Songgom","role":"admin"}'::jsonb,
+            NOW(), NOW(), '', '', '', ''
+        );
+    ELSE
+        SELECT id INTO v_admin2_id FROM auth.users WHERE email = 'admin@smk.id';
+        UPDATE auth.users SET encrypted_password = crypt('AdminTKA2026!', gen_salt('bf')) WHERE id = v_admin2_id;
+    END IF;
+
+    INSERT INTO public.profiles (id, email, full_name, role, status)
+    VALUES (v_admin2_id, 'admin@smk.id', 'Administrator SMKN 1 Songgom', 'admin', 'active')
+    ON CONFLICT (id) DO UPDATE SET role = 'admin', status = 'active';
+
+    -- 3. AKUN GURU RESMI: guru@smk.id (Password: GuruTKA2026!)
+    IF NOT EXISTS (SELECT 1 FROM auth.users WHERE email = 'guru@smk.id') THEN
+        INSERT INTO auth.users (
+            id, instance_id, aud, role, email, encrypted_password,
+            email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
+            created_at, updated_at, confirmation_token, recovery_token, email_change_token_new, email_change
+        ) VALUES (
+            v_guru_id,
+            '00000000-0000-0000-0000-000000000000',
+            'authenticated',
+            'authenticated',
+            'guru@smk.id',
+            crypt('GuruTKA2026!', gen_salt('bf')),
+            NOW(),
+            '{"provider":"email","providers":["email"]}'::jsonb,
+            '{"full_name":"Siti Aminah, S.Kom., Gr.","role":"guru"}'::jsonb,
+            NOW(), NOW(), '', '', '', ''
+        );
+    ELSE
+        SELECT id INTO v_guru_id FROM auth.users WHERE email = 'guru@smk.id';
+        UPDATE auth.users SET encrypted_password = crypt('GuruTKA2026!', gen_salt('bf')) WHERE id = v_guru_id;
+    END IF;
+
+    INSERT INTO public.profiles (id, email, full_name, role, status, nip)
+    VALUES (v_guru_id, 'guru@smk.id', 'Siti Aminah, S.Kom., Gr.', 'guru', 'active', '198803152014022003')
+    ON CONFLICT (id) DO UPDATE SET role = 'guru', status = 'active';
+
+    UPDATE public.teachers SET user_id = v_guru_id WHERE email = 'guru@smk.id';
+
+    -- 4. AKUN SISWA RESMI: siswa@smk.id (Password: SiswaTKA2026!)
+    IF NOT EXISTS (SELECT 1 FROM auth.users WHERE email = 'siswa@smk.id') THEN
+        INSERT INTO auth.users (
+            id, instance_id, aud, role, email, encrypted_password,
+            email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
+            created_at, updated_at, confirmation_token, recovery_token, email_change_token_new, email_change
+        ) VALUES (
+            v_siswa_id,
+            '00000000-0000-0000-0000-000000000000',
+            'authenticated',
+            'authenticated',
+            'siswa@smk.id',
+            crypt('SiswaTKA2026!', gen_salt('bf')),
+            NOW(),
+            '{"provider":"email","providers":["email"]}'::jsonb,
+            '{"full_name":"Budi Siswa Pratama","role":"siswa"}'::jsonb,
+            NOW(), NOW(), '', '', '', ''
+        );
+    ELSE
+        SELECT id INTO v_siswa_id FROM auth.users WHERE email = 'siswa@smk.id';
+        UPDATE auth.users SET encrypted_password = crypt('SiswaTKA2026!', gen_salt('bf')) WHERE id = v_siswa_id;
+    END IF;
+
+    INSERT INTO public.profiles (id, email, full_name, role, status, nis, nisn, class_name, major_name)
+    VALUES (v_siswa_id, 'siswa@smk.id', 'Budi Siswa Pratama', 'siswa', 'active', '21001', '0051234567', 'XI TJKT 1', 'Teknik Jaringan Komputer dan Telekomunikasi')
+    ON CONFLICT (id) DO UPDATE SET role = 'siswa', status = 'active';
+
+    UPDATE public.students SET user_id = v_siswa_id WHERE email = 'siswa@smk.id';
+
+END $$;
+
 -- Selesai!
-SELECT 'SKRIP DATABASE TKA SMKN 1 SONGGOM BERHASIL DIJALANKAN 100% SUKSES!' AS status;
+SELECT 'SKRIP DATABASE TKA SMKN 1 SONGGOM DAN AKUN PENGGUNA RESMI BERHASIL DIBUAT 100% SUKSES!' AS status;
