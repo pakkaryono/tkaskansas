@@ -34,7 +34,6 @@ import {
 } from '../../components/questions/QuestionDetailModal';
 import { QuestionFormModal } from '../../components/questions/QuestionFormModal';
 import { RichTextViewer } from '../../components/common/RichTextViewer';
-import { SUPABASE_PHASE_3_SQL } from '../../lib/supabaseSchema';
 import { ImportWizardModal } from '../../components/importExport/ImportWizardModal';
 import { QuestionTemplateGuideModal } from '../../components/importExport/QuestionTemplateGuideModal';
 import { exportEntityToExcel, downloadTemplateExcel } from '../../lib/excelEngine';
@@ -74,7 +73,6 @@ export const BankSoalAdminPage: React.FC = () => {
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
   const [detailQuestion, setDetailQuestion] = useState<Question | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Question | null>(null);
-  const [showSqlModal, setShowSqlModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showGuideModal, setShowGuideModal] = useState(false);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
@@ -740,43 +738,6 @@ export const BankSoalAdminPage: React.FC = () => {
                 className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold cursor-pointer"
               >
                 Ya, Hapus
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Skema SQL & RLS */}
-      {showSqlModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[85vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
-            <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Database className="w-5 h-5 text-emerald-600" />
-                <h3 className="font-bold text-slate-900 text-sm">Skema Supabase Fase 3 & RLS Bank Soal</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowSqlModal(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="p-4 overflow-y-auto font-mono text-[11px] bg-slate-950 text-emerald-300">
-              <pre className="whitespace-pre-wrap">{SUPABASE_PHASE_3_SQL}</pre>
-            </div>
-            <div className="p-3 bg-slate-50 border-t border-slate-200 flex justify-between items-center text-xs">
-              <span className="text-slate-500">Mencakup tabel questions, options, answers, matching_pairs, storage, dan RLS.</span>
-              <button
-                type="button"
-                onClick={() => {
-                  navigator.clipboard.writeText(SUPABASE_PHASE_3_SQL);
-                  alert('DDL SQL Fase 3 berhasil disalin ke clipboard!');
-                }}
-                className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-700 cursor-pointer"
-              >
-                Salin SQL
               </button>
             </div>
           </div>

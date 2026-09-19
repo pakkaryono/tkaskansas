@@ -202,18 +202,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           {/* Quick Guide Trigger & PWA Install */}
           <div className="pt-4 mt-4 border-t border-slate-100 space-y-2">
-            {role === 'admin' && (
-              <button
-                onClick={() => {
-                  onCloseMobile();
-                  onOpenGuide();
-                }}
-                className="w-full flex items-center gap-3 px-3.5 py-2 rounded-xl text-xs font-medium text-slate-600 hover:text-blue-700 hover:bg-blue-50 transition-colors"
-              >
-                <Database className="w-4 h-4 text-blue-600" />
-                <span>Panduan & Skrip SQL</span>
-              </button>
-            )}
             <div className="px-2 pt-1">
               <PWAInstallButton variant="full" className="w-full justify-center" />
             </div>

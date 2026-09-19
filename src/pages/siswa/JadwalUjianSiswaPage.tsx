@@ -48,22 +48,21 @@ export const JadwalUjianSiswaPage: React.FC<JadwalUjianSiswaPageProps> = ({ onNa
 
   // Siswa Aktif (Default: Siswa XI TJKT 1)
   const currentStudent = useMemo<Student>(() => {
-    // Cari siswa dengan role siswa atau fallback ke Budi Siswa (XI TJKT 1)
-    const found = students.find((s) => s.id === profile?.id || s.email === profile?.email);
+    // Cari siswa dengan role siswa sesuai akun yang login
+    const found = students.find((s) => s.id === profile?.id || s.user_id === profile?.id || s.email === profile?.email);
     if (found) return found;
 
-    // Default Demo Siswa: XI TJKT 1
     return {
-      id: 'demo-siswa-uuid-001',
-      user_id: 'demo-siswa-uuid-001',
-      nis: '21001',
-      nisn: '0051234567',
-      full_name: 'Budi Siswa Pratama',
-      email: 'siswa@sekolah.sch.id',
-      phone: '081234567890',
+      id: profile?.id || '',
+      user_id: profile?.id || '',
+      nis: profile?.nis || '',
+      nisn: profile?.nisn || '',
+      full_name: profile?.full_name || 'Siswa',
+      email: profile?.email || '',
+      phone: profile?.phone_number || '',
       gender: 'L',
-      class_id: 'b2222222-2222-2222-2222-222222222222', // XI TJKT 1
-      major_id: 'a1111111-1111-1111-1111-111111111111', // TJKT
+      class_id: profile?.class_id || students[0]?.class_id || '',
+      major_id: profile?.major_id || students[0]?.major_id || '',
       status: 'active',
     };
   }, [students, profile]);

@@ -831,7 +831,7 @@ export function transformRowToDomainEntity(
       scoringMethod = 'partial_credit';
     }
 
-    const teacherId = context.currentUser?.id || 'demo-guru-uuid-002';
+    const teacherId = context.currentUser?.id || (context.teachers && context.teachers[0]?.id) || '';
     const qId = `q-imp-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
     // Build options if PG

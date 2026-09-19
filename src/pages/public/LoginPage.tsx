@@ -14,7 +14,6 @@ import { useAuth } from '../../contexts/AuthContext';
 
 interface LoginPageProps {
   onNavigate: (path: string) => void;
-  onOpenGuide?: () => void;
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
@@ -116,7 +115,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
                     clearError();
                     setEmail(e.target.value);
                   }}
-                  placeholder="admin@smk.id / guru@smk.id / siswa@smk.id"
+                  placeholder="nama@smkn1songgom.sch.id / email terdaftar"
                   required
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all"
                 />

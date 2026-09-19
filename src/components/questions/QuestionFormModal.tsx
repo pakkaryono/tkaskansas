@@ -140,7 +140,7 @@ export const QuestionFormModal: React.FC<QuestionFormModalProps> = ({
       const autoCode = `SOAL-${Date.now().toString().slice(-4)}`;
       setCode(autoCode);
       setSubjectId(defaultSubId);
-      setTeacherId(profile?.id || 'demo-guru-uuid-002');
+      setTeacherId(profile?.id || teachers[0]?.id || '');
       setGrade('XI');
       setClassId('');
       setMajorId(majors[0]?.id || '');
@@ -253,7 +253,7 @@ export const QuestionFormModal: React.FC<QuestionFormModalProps> = ({
       const payload: Omit<Question, 'id' | 'created_at' | 'updated_at'> = {
         code: code.trim().toUpperCase(),
         subject_id: subjectId,
-        teacher_id: teacherId || profile?.id || 'demo-guru-uuid-002',
+        teacher_id: teacherId || profile?.id || teachers[0]?.id || '',
         grade,
         class_id: classId || undefined,
         major_id: majorId || undefined,

@@ -41,7 +41,8 @@ export const ManajemenUjianGuruPage: React.FC = () => {
   const { profile } = useAuth();
 
   // Temukan relasi mata pelajaran yang diampu oleh Guru ini
-  const myTeacherId = profile?.id || 'demo-guru-uuid-002'; // Fallback demo Siti Aminah
+  const myTeacher = teachers.find(t => t.id === profile?.id || t.user_id === profile?.id || t.email === profile?.email);
+  const myTeacherId = myTeacher?.id || profile?.id || '';
   const myAssignedSubjectIds = useMemo(() => {
     return teacherSubjects
       .filter((ts) => ts.teacher_id === myTeacherId)

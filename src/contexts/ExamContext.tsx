@@ -817,7 +817,8 @@ export const ExamProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const myId = myStudent?.id || profile.id;
         const isSelf =
           studentId === myId ||
-          (studentId.startsWith('demo-siswa') && myId.startsWith('demo-siswa'));
+          studentId === profile.id ||
+          myStudent?.user_id === profile.id;
 
         if (!isSelf) {
           AuditLogger.log({
@@ -950,7 +951,8 @@ export const ExamProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const myId = myStudent?.id || profile.id;
         const isSelf =
           attempt.student_id === myId ||
-          (attempt.student_id.startsWith('demo-siswa') && myId.startsWith('demo-siswa'));
+          attempt.student_id === profile.id ||
+          myStudent?.user_id === profile.id;
 
         if (!isSelf) {
           AuditLogger.log({
@@ -1149,7 +1151,8 @@ export const ExamProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const myId = myStudent?.id || profile.id;
         const isSelf =
           attempt.student_id === myId ||
-          (attempt.student_id.startsWith('demo-siswa') && myId.startsWith('demo-siswa'));
+          attempt.student_id === profile.id ||
+          myStudent?.user_id === profile.id;
 
         if (!isSelf) {
           AuditLogger.log({
@@ -1187,7 +1190,8 @@ export const ExamProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const myId = myStudent?.id || profile.id;
         const isSelf =
           attempt.student_id === myId ||
-          (attempt.student_id.startsWith('demo-siswa') && myId.startsWith('demo-siswa'));
+          attempt.student_id === profile.id ||
+          myStudent?.user_id === profile.id;
 
         if (!isSelf) {
           AuditLogger.log({
@@ -1254,7 +1258,8 @@ export const ExamProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const myId = myStudent?.id || profile.id;
         const isSelf =
           attempt.student_id === myId ||
-          (attempt.student_id.startsWith('demo-siswa') && myId.startsWith('demo-siswa'));
+          attempt.student_id === profile.id ||
+          myStudent?.user_id === profile.id;
         if (!isSelf) return;
       }
 
@@ -1293,7 +1298,8 @@ export const ExamProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const myId = myStudent?.id || profile.id;
         const isSelf =
           studentId === myId ||
-          (studentId.startsWith('demo-siswa') && myId.startsWith('demo-siswa'));
+          studentId === profile.id ||
+          myStudent?.user_id === profile.id;
 
         if (!isSelf) {
           AuditLogger.log({

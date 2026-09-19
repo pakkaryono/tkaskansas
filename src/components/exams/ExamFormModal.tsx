@@ -275,7 +275,7 @@ export const ExamFormModal: React.FC<ExamFormModalProps> = ({
           title: title.trim(),
           description: description.trim() || undefined,
           subject_id: subjectId,
-          teacher_id: profile?.id || 'demo-guru-uuid-002',
+          teacher_id: profile?.id || teachers[0]?.id || '',
           grade,
           major_id: majorId && majorId !== 'all' ? majorId : undefined,
           target_class_ids: targetClassIds,

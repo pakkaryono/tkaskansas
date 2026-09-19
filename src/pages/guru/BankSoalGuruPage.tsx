@@ -201,7 +201,7 @@ export const BankSoalGuruPage: React.FC = () => {
     } else {
       const created = await addQuestion({
         ...data,
-        teacher_id: currentTeacher?.id || profile?.id || 'demo-guru-uuid-002',
+        teacher_id: currentTeacher?.id || profile?.id || '',
       });
       showTemporaryNotice(`Soal baru "${created.code}" berhasil disimpan.`);
     }

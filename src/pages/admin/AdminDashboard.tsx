@@ -80,15 +80,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onOp
 
           <div className="mt-5 flex flex-wrap items-center gap-3">
             <button
-              onClick={onOpenGuide}
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-semibold text-xs transition-colors"
-            >
-              <Database className="w-3.5 h-3.5" />
-              <span>Panduan & Skrip Supabase</span>
-            </button>
-            <button
               onClick={() => onNavigate('/admin/profil')}
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-medium border border-white/20 transition-colors"
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-semibold text-xs transition-colors"
             >
               <span>Edit Profil Admin</span>
             </button>

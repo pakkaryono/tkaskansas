@@ -5,7 +5,6 @@ import { Navbar } from './components/common/Navbar';
 import { Sidebar } from './components/common/Sidebar';
 import { Header } from './components/common/Header';
 import { SupabaseStatusBanner } from './components/common/SupabaseStatusBanner';
-import { SupabaseGuideModal } from './pages/common/SupabaseGuideModal';
 import { LandingPage } from './pages/public/LandingPage';
 import { AboutPage } from './pages/public/AboutPage';
 import { LoginPage } from './pages/public/LoginPage';
@@ -52,7 +51,6 @@ function AppContent() {
     return window.location.pathname || '/';
   });
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
-  const [guideModalOpen, setGuideModalOpen] = useState<boolean>(false);
   const [authErrorNotice, setAuthErrorNotice] = useState<string | null>(null);
 
   // Sync dengan browser history (popstate)
@@ -131,17 +129,16 @@ function AppContent() {
         <Navbar
           currentPath={currentPath}
           onNavigate={navigate}
-          onOpenGuide={() => setGuideModalOpen(true)}
         />
         <main className="flex-1">
           {currentPath === '/' && (
-            <LandingPage onNavigate={navigate} onOpenGuide={() => setGuideModalOpen(true)} />
+            <LandingPage onNavigate={navigate} />
           )}
           {currentPath === '/tentang' && (
-            <AboutPage onNavigate={navigate} onOpenGuide={() => setGuideModalOpen(true)} />
+            <AboutPage onNavigate={navigate} />
           )}
           {currentPath === '/login' && (
-            <LoginPage onNavigate={navigate} onOpenGuide={() => setGuideModalOpen(true)} />
+            <LoginPage onNavigate={navigate} />
           )}
           {currentPath === '/panduan' && (
             <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
@@ -154,13 +151,9 @@ function AppContent() {
             currentPath !== '/tentang' &&
             currentPath !== '/login' &&
             currentPath !== '/panduan' && (
-              <LandingPage onNavigate={navigate} onOpenGuide={() => setGuideModalOpen(true)} />
+              <LandingPage onNavigate={navigate} />
             )}
         </main>
-        <SupabaseGuideModal
-          isOpen={guideModalOpen}
-          onClose={() => setGuideModalOpen(false)}
-        />
       </div>
     );
   }
@@ -183,7 +176,7 @@ function AppContent() {
     <div className="min-h-screen bg-slate-50 flex flex-col">
       <NetworkStatusBanner />
       {role === 'admin' && (
-        <SupabaseStatusBanner onOpenGuide={() => setGuideModalOpen(true)} />
+        <SupabaseStatusBanner />
       )}
 
       <div className="flex-1 flex flex-row">
@@ -193,14 +186,12 @@ function AppContent() {
           onNavigate={navigate}
           mobileOpen={mobileSidebarOpen}
           onCloseMobile={() => setMobileSidebarOpen(false)}
-          onOpenGuide={() => setGuideModalOpen(true)}
         />
 
         {/* Content Wrapper */}
         <div className="flex-1 flex flex-col min-w-0 lg:pl-72">
           <Header
             onToggleMobileSidebar={() => setMobileSidebarOpen(!mobileSidebarOpen)}
-            onOpenGuide={() => setGuideModalOpen(true)}
             currentPath={currentPath}
             onNavigate={navigate}
           />
@@ -216,13 +207,13 @@ function AppContent() {
             {/* Router Halaman Authenticated dengan Suspense Code Splitting */}
             <Suspense fallback={<PageFallbackSkeleton />}>
               {currentPath === '/admin/dashboard' && (
-                <AdminDashboard onNavigate={navigate} onOpenGuide={() => setGuideModalOpen(true)} />
+                <AdminDashboard onNavigate={navigate} />
               )}
               {currentPath === '/guru/dashboard' && (
-                <GuruDashboard onNavigate={navigate} onOpenGuide={() => setGuideModalOpen(true)} />
+                <GuruDashboard onNavigate={navigate} />
               )}
               {currentPath === '/siswa/dashboard' && (
-                <SiswaDashboard onNavigate={navigate} onOpenGuide={() => setGuideModalOpen(true)} />
+                <SiswaDashboard onNavigate={navigate} />
               )}
               {(currentPath === '/admin/profil' || currentPath === '/guru/profil' || currentPath === '/siswa/profil') && (
                 <ProfilePage />
@@ -329,18 +320,12 @@ function AppContent() {
                   <PhasePreviewPage
                     path={currentPath}
                     onNavigate={navigate}
-                    onOpenGuide={() => setGuideModalOpen(true)}
                   />
                 )}
             </Suspense>
           </main>
         </div>
       </div>
-
-      <SupabaseGuideModal
-        isOpen={guideModalOpen}
-        onClose={() => setGuideModalOpen(false)}
-      />
     </div>
   );
 }

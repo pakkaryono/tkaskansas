@@ -26,7 +26,6 @@ import { useAuth } from '../../contexts/AuthContext';
 interface PhasePreviewPageProps {
   path: string;
   onNavigate: (path: string) => void;
-  onOpenGuide?: () => void;
 }
 
 interface ModuleInfo {
@@ -175,16 +174,6 @@ export const PhasePreviewPage: React.FC<PhasePreviewPageProps> = ({ path, onNavi
           <ArrowLeft className="w-4 h-4" />
           <span>Kembali ke Dashboard</span>
         </button>
-
-        {role === 'admin' && onOpenGuide && (
-          <button
-            onClick={onOpenGuide}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 shadow-xs transition-colors cursor-pointer"
-          >
-            <Database className="w-3.5 h-3.5 text-blue-600" />
-            <span>Skema Basis Data</span>
-          </button>
-        )}
       </div>
 
       {/* Page Header */}

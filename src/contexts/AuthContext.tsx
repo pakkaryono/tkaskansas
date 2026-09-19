@@ -35,24 +35,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let mounted = true;
 
     async function initAuth() {
-      // 1. Cek apakah ada demo session di localStorage
-      const savedDemo = localStorage.getItem(DEMO_STORAGE_KEY);
-      if (savedDemo) {
-        try {
-          const parsed = JSON.parse(savedDemo) as UserProfile;
-          if (mounted) {
-            setProfile(parsed);
-            setUser({ id: parsed.id, email: parsed.email });
-            setIsDemoMode(true);
-            setLoading(false);
-          }
-          return;
-        } catch {
-          localStorage.removeItem(DEMO_STORAGE_KEY);
-        }
-      }
+      // Pastikan tidak ada sisa sesi demo
+      localStorage.removeItem(DEMO_STORAGE_KEY);
 
-      // 2. Jika Supabase dikonfigurasi, coba ambil session Supabase
+      // Jika Supabase dikonfigurasi, coba ambil session Supabase
       if (isSupabaseConfigured) {
         try {
           const { data: { session }, error: sessionError } = await supabase.auth.getSession();
@@ -131,26 +117,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Login Handler (Mendukung Supabase Auth nyata + Fallback Demo)
+  // Login Handler (Otentikasi Nyata via Supabase Auth)
   const login = async (email: string, password: string): Promise<{ success: boolean; role?: UserRole; error?: string }> => {
     setError(null);
     setLoading(true);
 
     try {
-      // Cek apakah akun cocok dengan demo credentials
-      const matchingDemo = Object.values(DEMO_USERS).find(
-        (u) => u.email.toLowerCase() === email.trim().toLowerCase() && u.password === password
-      );
-
-      if (matchingDemo && (!isSupabaseConfigured || email.endsWith('@smk.id'))) {
-        // Login sebagai demo
-        loginAsDemo(matchingDemo.profile.role);
-        setLoading(false);
-        return { success: true, role: matchingDemo.profile.role };
-      }
-
       if (!isSupabaseConfigured) {
-        const msg = 'Supabase belum dikonfigurasi. Gunakan tombol Akun Demo atau atur VITE_SUPABASE_URL di Settings.';
+        const msg = 'Layanan Supabase belum terhubung. Silakan periksa konfigurasi VITE_SUPABASE_URL & ANON_KEY.';
         setError(msg);
         setLoading(false);
         return { success: false, error: msg };
@@ -226,26 +200,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Login Demo Cepat untuk Evaluasi & Pengujian
-  const loginAsDemo = (roleChoice: UserRole) => {
-    const demo = DEMO_USERS[roleChoice];
-    if (demo) {
-      setUser({ id: demo.profile.id, email: demo.profile.email });
-      setProfile(demo.profile);
-      setIsDemoMode(true);
-      setError(null);
-      localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(demo.profile));
-
-      AuditLogger.log({
-        action: 'LOGIN',
-        entity: 'AuthSystem',
-        userId: demo.profile.id,
-        userEmail: demo.profile.email,
-        userRole: roleChoice,
-        details: { method: 'demo_preset', role: roleChoice },
-        status: 'SUCCESS',
-      });
-    }
+  // Akun Demo Dinonaktifkan (Produksi Mode)
+  const loginAsDemo = (_roleChoice: UserRole) => {
+    console.info('Mode demo telah dinonaktifkan. Silakan login menggunakan akun resmi.');
   };
 
   // Logout Handler
