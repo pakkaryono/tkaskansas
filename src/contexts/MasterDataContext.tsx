@@ -53,6 +53,7 @@ interface MasterDataContextType {
     total_fixed: number;
     message: string;
   }>;
+  refreshData: () => Promise<void>;
 }
 
 const MasterDataContext = createContext<MasterDataContextType | undefined>(undefined);
@@ -328,49 +329,49 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   }, [students]);
 
   // Load from Supabase if configured, with graceful fallback
-  useEffect(() => {
-    const fetchFromSupabase = async () => {
-      if (!isSupabaseConfigured || !supabase) return;
-      try {
-        setLoading(true);
-        const { data: dbMajors, error: errMajors } = await supabase.from('majors').select('*');
-        if (!errMajors && dbMajors && dbMajors.length > 0) {
-          setMajors(dbMajors);
-        }
-
-        const { data: dbClasses, error: errClasses } = await supabase.from('classes').select('*');
-        if (!errClasses && dbClasses && dbClasses.length > 0) {
-          setClasses(dbClasses);
-        }
-
-        const { data: dbSubjects, error: errSubjects } = await supabase.from('subjects').select('*');
-        if (!errSubjects && dbSubjects && dbSubjects.length > 0) {
-          setSubjects(dbSubjects);
-        }
-
-        const { data: dbTeachers, error: errTeachers } = await supabase.from('teachers').select('*');
-        if (!errTeachers && dbTeachers && dbTeachers.length > 0) {
-          // get relations
-          const { data: dbTS } = await supabase.from('teacher_subjects').select('*');
-          const mappedTeachers = dbTeachers.map((t: any) => ({
-            ...t,
-            subject_ids: dbTS ? dbTS.filter((item: any) => item.teacher_id === t.id).map((item: any) => item.subject_id) : [],
-          }));
-          setTeachers(mappedTeachers);
-        }
-
-        const { data: dbStudents, error: errStudents } = await supabase.from('students').select('*');
-        if (!errStudents && dbStudents && dbStudents.length > 0) {
-          setStudents(dbStudents);
-        }
-      } catch (err) {
-        console.warn('Supabase fetch notice (using local storage cache):', err);
-      } finally {
-        setLoading(false);
+  const refreshData = async () => {
+    if (!isSupabaseConfigured || !supabase) return;
+    try {
+      setLoading(true);
+      const { data: dbMajors, error: errMajors } = await supabase.from('majors').select('*');
+      if (!errMajors && dbMajors && dbMajors.length > 0) {
+        setMajors(dbMajors);
       }
-    };
 
-    fetchFromSupabase();
+      const { data: dbClasses, error: errClasses } = await supabase.from('classes').select('*');
+      if (!errClasses && dbClasses && dbClasses.length > 0) {
+        setClasses(dbClasses);
+      }
+
+      const { data: dbSubjects, error: errSubjects } = await supabase.from('subjects').select('*');
+      if (!errSubjects && dbSubjects && dbSubjects.length > 0) {
+        setSubjects(dbSubjects);
+      }
+
+      const { data: dbTeachers, error: errTeachers } = await supabase.from('teachers').select('*');
+      if (!errTeachers && dbTeachers && dbTeachers.length > 0) {
+        // get relations
+        const { data: dbTS } = await supabase.from('teacher_subjects').select('*');
+        const mappedTeachers = dbTeachers.map((t: any) => ({
+          ...t,
+          subject_ids: dbTS ? dbTS.filter((item: any) => item.teacher_id === t.id).map((item: any) => item.subject_id) : [],
+        }));
+        setTeachers(mappedTeachers);
+      }
+
+      const { data: dbStudents, error: errStudents } = await supabase.from('students').select('*');
+      if (!errStudents && dbStudents && dbStudents.length > 0) {
+        setStudents(dbStudents);
+      }
+    } catch (err) {
+      console.warn('Supabase fetch notice (using local storage cache):', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    refreshData();
   }, []);
 
   // Enrich classes with major data
@@ -674,7 +675,11 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           p_subject_ids: data.subject_ids || [],
         });
 
-        if (rpcErr || (rpcRes && !rpcRes.success)) {
+        if (!rpcErr && rpcRes && rpcRes.success) {
+          if (rpcRes.user_id) {
+            newTeacher.id = rpcRes.user_id;
+          }
+        } else {
           console.warn('RPC admin_create_user guru notice, menggunakan fallback:', rpcErr?.message || rpcRes?.error);
 
           // Fallback dengan isolated client agar sesi admin tidak tertimpa
@@ -885,7 +890,11 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           p_major_id: resolvedMajorId || null,
         });
 
-        if (rpcErr || (rpcRes && !rpcRes.success)) {
+        if (!rpcErr && rpcRes && rpcRes.success) {
+          if (rpcRes.user_id) {
+            newStudent.id = rpcRes.user_id;
+          }
+        } else {
           console.warn('RPC admin_create_user siswa notice, menggunakan fallback:', rpcErr?.message || rpcRes?.error);
 
           // Fallback isolated client agar sesi admin tidak tertimpa
@@ -1161,6 +1170,10 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       });
     }
 
+    if (isSupabaseConfigured && supabase) {
+      await refreshData();
+    }
+
     return { imported: imported || newStudentsToAdd.length, failed };
   };
 
@@ -1278,6 +1291,10 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       });
     }
 
+    if (isSupabaseConfigured && supabase) {
+      await refreshData();
+    }
+
     return { imported: imported || newTeachersToAdd.length, failed };
   };
 
@@ -1391,6 +1408,8 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       if (error) {
         throw new Error(error.message);
       }
+
+      await refreshData();
 
       return {
         success: data?.success ?? true,
@@ -1527,6 +1546,7 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         importClassesBatch,
         importMajorsBatch,
         syncAllLoginAccounts,
+        refreshData,
       }}
     >
       {children}

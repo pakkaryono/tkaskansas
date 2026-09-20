@@ -20,12 +20,17 @@ import {
   KeyRound,
   RefreshCw,
   AlertTriangle,
+  Copy,
+  Check,
+  Code2,
+  X,
 } from 'lucide-react';
 import { useMasterData } from '../../contexts/MasterDataContext';
 import { useQuestionBank } from '../../contexts/QuestionBankContext';
 import { ImportWizardModal } from '../../components/importExport/ImportWizardModal';
 import { QuestionTemplateGuideModal } from '../../components/importExport/QuestionTemplateGuideModal';
 import { ExcelImportTestSuite } from '../../components/importExport/ExcelImportTestSuite';
+import { SUPABASE_ADD_ADMIN_USER_FUNCTIONS_SQL } from '../../lib/supabaseSchema';
 import {
   exportEntityToExcel,
   downloadTemplateExcel,
@@ -46,6 +51,8 @@ export const ImportExportAdminPage: React.FC<ImportExportAdminPageProps> = ({ on
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [copiedSql, setCopiedSql] = useState(false);
+  const [isSqlModalOpen, setIsSqlModalOpen] = useState(false);
   const [syncStatus, setSyncStatus] = useState<{
     type: 'success' | 'error' | 'info';
     message: string;
@@ -55,6 +62,13 @@ export const ImportExportAdminPage: React.FC<ImportExportAdminPageProps> = ({ on
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 4000);
+  };
+
+  const handleCopySql = () => {
+    navigator.clipboard.writeText(SUPABASE_ADD_ADMIN_USER_FUNCTIONS_SQL);
+    setCopiedSql(true);
+    triggerToast('Skrip SQL perbaikan autentikasi berhasil disalin ke clipboard!');
+    setTimeout(() => setCopiedSql(false), 3000);
   };
 
   const handleSyncAllAccounts = async () => {
@@ -346,15 +360,36 @@ export const ImportExportAdminPage: React.FC<ImportExportAdminPageProps> = ({ on
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={handleSyncAllAccounts}
-              disabled={isSyncing}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold shadow-xs transition-colors shrink-0 cursor-pointer"
-            >
-              <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-              <span>{isSyncing ? 'Menyinkronkan...' : 'Sinkronkan Akun Login'}</span>
-            </button>
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleCopySql}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-blue-300 bg-white hover:bg-blue-50 text-blue-700 text-xs font-bold shadow-xs transition-colors cursor-pointer"
+                title="Salin skrip SQL add_admin_user_functions.sql untuk dieksekusi di Supabase SQL Editor"
+              >
+                {copiedSql ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-blue-600" />}
+                <span>{copiedSql ? 'Tersalin ke Clipboard' : 'Salin Skrip SQL Auth'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsSqlModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold shadow-xs transition-colors cursor-pointer"
+              >
+                <Code2 className="w-4 h-4 text-slate-500" />
+                <span>Lihat Skrip SQL</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSyncAllAccounts}
+                disabled={isSyncing}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer"
+              >
+                <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                <span>{isSyncing ? 'Menyinkronkan...' : 'Sinkronkan Akun Login'}</span>
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -529,6 +564,83 @@ export const ImportExportAdminPage: React.FC<ImportExportAdminPageProps> = ({ on
         isOpen={isGuideOpen}
         onClose={() => setIsGuideOpen(false)}
       />
+
+      {/* Supabase SQL Editor Script Modal */}
+      {isSqlModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-3xl w-full max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center">
+                  <Code2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Skrip SQL add_admin_user_functions.sql</h3>
+                  <p className="text-xs text-slate-500">Jalankan di Supabase Dashboard → SQL Editor → New Query</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSqlModalOpen(false)}
+                className="w-8 h-8 rounded-lg hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-700 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto space-y-4 flex-1">
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900 space-y-1">
+                <div className="font-bold flex items-center gap-1.5">
+                  <Info className="w-4 h-4 text-blue-600" />
+                  <span>Petunjuk Penggunaan:</span>
+                </div>
+                <p>1. Klik tombol <strong>"Salin Seluruh Skrip SQL"</strong> di bawah.</p>
+                <p>2. Buka project Supabase Anda di browser, masuk ke menu <strong>SQL Editor</strong>.</p>
+                <p>3. Buat <em>New query</em>, tempel (paste) skrip ini, lalu klik <strong>Run</strong>.</p>
+                <p>4. Setelah skrip selesai dijalankan, seluruh akun siswa, guru, dan admin yang dibuat manual atau lewat upload template Excel akan otomatis masuk ke <code>auth.users</code> dengan UUID urut dan siap login.</p>
+              </div>
+
+              <div className="relative">
+                <div className="flex items-center justify-between px-3 py-1.5 bg-slate-800 text-slate-300 text-xs rounded-t-xl">
+                  <span className="font-mono text-[11px]">add_admin_user_functions.sql</span>
+                  <button
+                    type="button"
+                    onClick={handleCopySql}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-slate-700 hover:bg-slate-600 text-white text-[11px] font-medium transition-colors"
+                  >
+                    {copiedSql ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedSql ? 'Tersalin!' : 'Salin'}</span>
+                  </button>
+                </div>
+                <pre className="bg-slate-950 text-emerald-400 p-4 rounded-b-xl text-xs font-mono overflow-x-auto max-h-96 leading-relaxed select-all">
+                  {SUPABASE_ADD_ADMIN_USER_FUNCTIONS_SQL}
+                </pre>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+              <span className="text-xs text-slate-500">Format UUID: 00000000-0000-0000-0000-xxxxxxxxxxxx</span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleCopySql}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-colors cursor-pointer"
+                >
+                  {copiedSql ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  <span>{copiedSql ? 'Berhasil Disalin!' : 'Salin Seluruh Skrip SQL'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsSqlModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
+                >
+                  Tutup
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
