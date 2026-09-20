@@ -1417,7 +1417,7 @@ INSERT INTO public.exams (
     randomize_questions, randomize_options, pass_score
 ) VALUES
 (
-    'g1111111-1111-1111-1111-111111111111',
+    '41111111-1111-1111-1111-111111111111',
     'TKA Asesmen 1 - Administrasi Infrastruktur Jaringan',
     'Ujian kompetensi kejuruan mencakup VLAN 802.1Q, DHCP Relay, OSPF Routing, dan OSI Layer.',
     'c4444444-4444-4444-4444-444444444444', 'd2222222-2222-2222-2222-222222222222', 'XI',
@@ -1427,7 +1427,7 @@ INSERT INTO public.exams (
     'open', true, true, 75.00
 ),
 (
-    'g2222222-2222-2222-2222-222222222222',
+    '42222222-2222-2222-2222-222222222222',
     'TKA Asesmen 1 - Pemeliharaan Mesin Otomotif TKRO',
     'Ujian kompetensi kejuruan pemeliharaan mesin, engine management EFI, dan tune up.',
     'c5555555-5555-5555-5555-555555555555', 'd3333333-3333-3333-3333-333333333333', 'XII',
@@ -1437,7 +1437,7 @@ INSERT INTO public.exams (
     'open', true, true, 75.00
 ),
 (
-    'g3333333-3333-3333-3333-333333333333',
+    '43333333-3333-3333-3333-333333333333',
     'TKA Bersama - Matematika Terapan Kejuruan Tingkat XI',
     'Asesmen terstandar logika matematika dan kalkulasi vektor teknik.',
     'c1111111-1111-1111-1111-111111111111', 'd4444444-4444-4444-4444-444444444444', 'XI',
@@ -1450,20 +1450,20 @@ ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, status = EXCLUDED.status;
 
 -- 12. RELASI KELAS PESERTA UJIAN (Minimal 3 Relasi)
 INSERT INTO public.exam_classes (exam_id, class_id) VALUES
-('g1111111-1111-1111-1111-111111111111', 'b2222222-2222-2222-2222-222222222222'), -- Ujian 1 ke XI TJKT 1
-('g2222222-2222-2222-2222-222222222222', 'b5555555-5555-5555-5555-555555555555'), -- Ujian 2 ke XII TKRO 1
-('g3333333-3333-3333-3333-333333333333', 'b2222222-2222-2222-2222-222222222222'), -- Ujian 3 ke XI TJKT 1
-('g3333333-3333-3333-3333-333333333333', 'b6666666-6666-6666-6666-666666666666')  -- Ujian 3 ke XI AKL 1
+('41111111-1111-1111-1111-111111111111', 'b2222222-2222-2222-2222-222222222222'), -- Ujian 1 ke XI TJKT 1
+('42222222-2222-2222-2222-222222222222', 'b5555555-5555-5555-5555-555555555555'), -- Ujian 2 ke XII TKRO 1
+('43333333-3333-3333-3333-333333333333', 'b2222222-2222-2222-2222-222222222222'), -- Ujian 3 ke XI TJKT 1
+('43333333-3333-3333-3333-333333333333', 'b6666666-6666-6666-6666-666666666666')  -- Ujian 3 ke XI AKL 1
 ON CONFLICT (exam_id, class_id) DO NOTHING;
 
 -- 13. RELASI BUTIR SOAL UJIAN (Minimal 3 Relasi)
 INSERT INTO public.exam_questions (exam_id, question_id, order_num, points, snapshot) VALUES
-('g1111111-1111-1111-1111-111111111111', 'f1111111-1111-1111-1111-111111111111', 1, 10, '{"type":"single_choice","title":"VLAN 802.1Q"}'::jsonb),
-('g1111111-1111-1111-1111-111111111111', 'f2222222-2222-2222-2222-222222222222', 2, 10, '{"type":"complex_choice","title":"DHCP Relay Diagnostic"}'::jsonb),
-('g1111111-1111-1111-1111-111111111111', 'f3333333-3333-3333-3333-333333333333', 3, 10, '{"type":"essay","title":"OSPF Dijkstra"}'::jsonb),
-('g1111111-1111-1111-1111-111111111111', 'f4444444-4444-4444-4444-444444444444', 4, 10, '{"type":"matching","title":"OSI Layer Matching"}'::jsonb),
-('g2222222-2222-2222-2222-222222222222', 'f5555555-5555-5555-5555-555555555555', 1, 10, '{"type":"single_choice","title":"ECT Sensor EFI"}'::jsonb),
-('g3333333-3333-3333-3333-333333333333', 'f6666666-6666-6666-6666-666666666666', 1, 10, '{"type":"single_choice","title":"Resultan Vektor Gaya"}'::jsonb)
+('41111111-1111-1111-1111-111111111111', 'f1111111-1111-1111-1111-111111111111', 1, 10, '{"type":"single_choice","title":"VLAN 802.1Q"}'::jsonb),
+('41111111-1111-1111-1111-111111111111', 'f2222222-2222-2222-2222-222222222222', 2, 10, '{"type":"complex_choice","title":"DHCP Relay Diagnostic"}'::jsonb),
+('41111111-1111-1111-1111-111111111111', 'f3333333-3333-3333-3333-333333333333', 3, 10, '{"type":"essay","title":"OSPF Dijkstra"}'::jsonb),
+('41111111-1111-1111-1111-111111111111', 'f4444444-4444-4444-4444-444444444444', 4, 10, '{"type":"matching","title":"OSI Layer Matching"}'::jsonb),
+('42222222-2222-2222-2222-222222222222', 'f5555555-5555-5555-5555-555555555555', 1, 10, '{"type":"single_choice","title":"ECT Sensor EFI"}'::jsonb),
+('43333333-3333-3333-3333-333333333333', 'f6666666-6666-6666-6666-666666666666', 1, 10, '{"type":"single_choice","title":"Resultan Vektor Gaya"}'::jsonb)
 ON CONFLICT (exam_id, question_id) DO NOTHING;
 
 -- 14. DATA HASIL & ATTEMPT PENGERJAAN SISWA (Minimal 3 Sesi Pengerjaan)
@@ -1474,8 +1474,8 @@ INSERT INTO public.exam_attempts (
 ) VALUES
 -- Sesi Siswa 1: Fajar Pratama (Skor 92.50 / Tuntas)
 (
-    'h1111111-1111-1111-1111-111111111111',
-    'g1111111-1111-1111-1111-111111111111',
+    '51111111-1111-1111-1111-111111111111',
+    '41111111-1111-1111-1111-111111111111',
     'e1111111-1111-1111-1111-111111111111',
     NOW() - INTERVAL '50 minutes',
     NOW() + INTERVAL '10 minutes',
@@ -1487,8 +1487,8 @@ INSERT INTO public.exam_attempts (
 ),
 -- Sesi Siswa 2: Siti Aisyah Lestari (Skor 97.50 / Tuntas Sangat Baik)
 (
-    'h2222222-2222-2222-2222-222222222222',
-    'g1111111-1111-1111-1111-111111111111',
+    '52222222-2222-2222-2222-222222222222',
+    '41111111-1111-1111-1111-111111111111',
     'e2222222-2222-2222-2222-222222222222',
     NOW() - INTERVAL '55 minutes',
     NOW() + INTERVAL '5 minutes',
@@ -1500,8 +1500,8 @@ INSERT INTO public.exam_attempts (
 ),
 -- Sesi Siswa 3: Rizky Ramadhan (Skor 100.00 / Tuntas)
 (
-    'h3333333-3333-3333-3333-333333333333',
-    'g2222222-2222-2222-2222-222222222222',
+    '53333333-3333-3333-3333-333333333333',
+    '42222222-2222-2222-2222-222222222222',
     'e3333333-3333-3333-3333-333333333333',
     NOW() - INTERVAL '40 minutes',
     NOW() + INTERVAL '50 minutes',
@@ -1519,35 +1519,35 @@ INSERT INTO public.student_answers (
 ) VALUES
 -- Jawaban Siswa Fajar untuk Soal 1 (PG Benar)
 (
-    'h1111111-1111-1111-1111-111111111111',
+    '51111111-1111-1111-1111-111111111111',
     'f1111111-1111-1111-1111-111111111111',
     '{"selected_key":"C"}'::jsonb,
     false, 10.00
 ),
 -- Jawaban Siswa Fajar untuk Soal 2 (Kompleks Benar Sebagian/Penuh)
 (
-    'h1111111-1111-1111-1111-111111111111',
+    '51111111-1111-1111-1111-111111111111',
     'f2222222-2222-2222-2222-222222222222',
     '{"selected_keys":["A","B","D"]}'::jsonb,
     false, 10.00
 ),
 -- Jawaban Siswa Fajar untuk Soal 3 (Esai Ternilai)
 (
-    'h1111111-1111-1111-1111-111111111111',
+    '51111111-1111-1111-1111-111111111111',
     'f3333333-3333-3333-3333-333333333333',
     '{"text":"LSA adalah paket informasi link state dalam area OSPF. Setiap router mengumpulkannya di LSDB dan algoritma Dijkstra SPF menghitung jalur metric cost terendah."}'::jsonb,
     false, 8.50
 ),
 -- Jawaban Siswa Fajar untuk Soal 4 (Menjodohkan Benar Sebagian/Penuh)
 (
-    'h1111111-1111-1111-1111-111111111111',
+    '51111111-1111-1111-1111-111111111111',
     'f4444444-4444-4444-4444-444444444444',
     '{"matches":{"pair_1":"HTTP, DNS, DHCP, SSH","pair_2":"TCP, UDP, Segmentasi & Port","pair_3":"IP Addressing, Routing, ICMP","pair_4":"MAC Address, Switching, 802.1Q"}}'::jsonb,
     false, 8.50
 ),
 -- Jawaban Siswa Rizky untuk Soal 5 (PG Otomotif Benar)
 (
-    'h3333333-3333-3333-3333-333333333333',
+    '53333333-3333-3333-3333-333333333333',
     'f5555555-5555-5555-5555-555555555555',
     '{"selected_key":"B"}'::jsonb,
     false, 10.00
