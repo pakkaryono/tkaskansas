@@ -1,46 +1,21 @@
 -- ==============================================================================
--- SKRIP DATABASE SQL PRODUKSI SUPABASE (LENGKAP & IDEMPOTENT)
+-- SKRIP DATABASE SQL PRODUKSI LENGKAP & MASTER OTENTIKASI SUPABASE
+-- PROYEK: mltysivggdshktbsrvtp.supabase.co
 -- APLIKASI TES KEMAMPUAN AKADEMIK (TKA) SMKN 1 SONGGOM
 -- ==============================================================================
--- CARA PENGGUNAAN DI SUPABASE:
--- 1. Masuk ke Supabase Dashboard (https://supabase.com/dashboard)
--- 2. Pilih Project Anda -> Klik menu 'SQL Editor' di bilah navigasi kiri
--- 3. Klik tombol '+ New query'
--- 4. Tempel (Paste) seluruh isi skrip ini ke dalam editor
--- 5. Klik tombol 'Run' (atau tekan Ctrl+Enter / Cmd+Enter)
---
--- FITUR DAN PERBAIKAN PADA SKRIP INI:
--- [x] Bebas error 42501 (Tidak menyentuh system trigger / RI_ConstraintTrigger)
--- [x] Bebas error 23502 (Kolom category pada subjects dibuat nullable dengan default 'Umum')
--- [x] Auto-Repair skema jika tabel sudah pernah dibuat sebelumnya
--- [x] Idempotent (Dapat dijalankan berulang kali tanpa konflik atau data terduplikasi)
--- [x] Struktur lengkap: Master Data, Bank Soal, Manajemen Ujian, CBT Attempt, Penilaian, Audit Log
--- [x] Keamanan Row Level Security (RLS) & RPC get_student_exam_payload
+-- Fitur & Penyempurnaan:
+-- [x] Skema Master Data, Bank Soal 4 Tipe Soal TKA, Pelaksanaan Ujian & CBT Engine
+-- [x] Bebas error 42804 (Dynamic check UUID vs TEXT pada auth.identities)
+-- [x] Idempotent (Aman dijalankan berulang kali tanpa merusak data yang ada)
+-- [x] Akun login resmi otomatis terdaftar dan terkonfirmasi (Ready-to-Login)
+-- [x] Mendukung login via NIS, NISN, NIP, atau Email
+-- [x] Fungsi RPC Lengkap: get_email_by_identifier, admin_create_user,
+--     admin_batch_create_users, admin_reset_user_password, sync_unregistered_logins
 -- ==============================================================================
 
 -- 1. EXTENSIONS
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-
--- 0. BERSIHKAN TABEL LAMA YANG KOSONG (AGAR TIDAK TERJADI BENTROK STRUKTUR KOLOM)
-DROP TABLE IF EXISTS public.student_answers CASCADE;
-DROP TABLE IF EXISTS public.exam_attempts CASCADE;
-DROP TABLE IF EXISTS public.exam_assignments CASCADE;
-DROP TABLE IF EXISTS public.exam_questions CASCADE;
-DROP TABLE IF EXISTS public.exams CASCADE;
-DROP TABLE IF EXISTS public.matching_pairs CASCADE;
-DROP TABLE IF EXISTS public.question_answers CASCADE;
-DROP TABLE IF EXISTS public.question_options CASCADE;
-DROP TABLE IF EXISTS public.questions CASCADE;
-DROP TABLE IF EXISTS public.students CASCADE;
-DROP TABLE IF EXISTS public.teacher_subjects CASCADE;
-DROP TABLE IF EXISTS public.teachers CASCADE;
-DROP TABLE IF EXISTS public.subjects CASCADE;
-DROP TABLE IF EXISTS public.classes CASCADE;
-DROP TABLE IF EXISTS public.majors CASCADE;
-DROP TABLE IF EXISTS public.profiles CASCADE;
-DROP TABLE IF EXISTS public.grade_category_configs CASCADE;
-DROP TABLE IF EXISTS public.audit_logs CASCADE;
 
 -- 2. TIPE ENUM ROLE
 DO $$ BEGIN
@@ -92,7 +67,6 @@ CREATE TABLE IF NOT EXISTS public.majors (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Auto-Repair Kolom Majors
 ALTER TABLE IF EXISTS public.majors ADD COLUMN IF NOT EXISTS description TEXT;
 ALTER TABLE IF EXISTS public.majors ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
 
@@ -110,7 +84,6 @@ CREATE TABLE IF NOT EXISTS public.classes (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Auto-Repair Kolom Classes
 ALTER TABLE IF EXISTS public.classes ADD COLUMN IF NOT EXISTS academic_year TEXT NOT NULL DEFAULT '2026/2027';
 ALTER TABLE IF EXISTS public.classes ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
 
@@ -129,7 +102,6 @@ CREATE TABLE IF NOT EXISTS public.subjects (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Auto-Repair Kolom Subjects (PENTING: Mencegah Error 23502 null value in column category)
 ALTER TABLE IF EXISTS public.subjects ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'Umum';
 ALTER TABLE IF EXISTS public.subjects ALTER COLUMN category DROP NOT NULL;
 ALTER TABLE IF EXISTS public.subjects ALTER COLUMN category SET DEFAULT 'Umum';
@@ -152,7 +124,6 @@ CREATE TABLE IF NOT EXISTS public.teachers (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Auto-Repair Kolom Teachers
 ALTER TABLE IF EXISTS public.teachers ADD COLUMN IF NOT EXISTS user_id UUID;
 ALTER TABLE IF EXISTS public.teachers ADD COLUMN IF NOT EXISTS phone_number TEXT;
 ALTER TABLE IF EXISTS public.teachers ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
@@ -189,7 +160,6 @@ CREATE TABLE IF NOT EXISTS public.students (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Auto-Repair Kolom Students
 ALTER TABLE IF EXISTS public.students ADD COLUMN IF NOT EXISTS user_id UUID;
 ALTER TABLE IF EXISTS public.students ADD COLUMN IF NOT EXISTS phone_number TEXT;
 ALTER TABLE IF EXISTS public.students ADD COLUMN IF NOT EXISTS gender TEXT DEFAULT 'L';
@@ -221,7 +191,6 @@ CREATE TABLE IF NOT EXISTS public.questions (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Auto-Repair Kolom Questions
 ALTER TABLE IF EXISTS public.questions ADD COLUMN IF NOT EXISTS image_url TEXT;
 ALTER TABLE IF EXISTS public.questions ADD COLUMN IF NOT EXISTS explanation TEXT;
 ALTER TABLE IF EXISTS public.questions ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
@@ -232,7 +201,7 @@ CREATE INDEX IF NOT EXISTS idx_questions_teacher_id ON public.questions(teacher_
 CREATE INDEX IF NOT EXISTS idx_questions_type ON public.questions(question_type);
 CREATE INDEX IF NOT EXISTS idx_questions_status ON public.questions(status);
 
--- 11. TABEL QUESTION_OPTIONS (Pilihan Jawaban PG & PG Kompleks)
+-- 11. TABEL QUESTION_OPTIONS
 CREATE TABLE IF NOT EXISTS public.question_options (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     question_id UUID NOT NULL REFERENCES public.questions(id) ON DELETE CASCADE,
@@ -244,13 +213,12 @@ CREATE TABLE IF NOT EXISTS public.question_options (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Auto-Repair Kolom Question Options
 ALTER TABLE IF EXISTS public.question_options ADD COLUMN IF NOT EXISTS image_url TEXT;
 ALTER TABLE IF EXISTS public.question_options ADD COLUMN IF NOT EXISTS is_correct BOOLEAN NOT NULL DEFAULT false;
 
 CREATE INDEX IF NOT EXISTS idx_question_options_question_id ON public.question_options(question_id);
 
--- 12. TABEL QUESTION_ANSWERS (Kunci Jawaban Esai & Rubrik)
+-- 12. TABEL QUESTION_ANSWERS
 CREATE TABLE IF NOT EXISTS public.question_answers (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     question_id UUID UNIQUE NOT NULL REFERENCES public.questions(id) ON DELETE CASCADE,
@@ -262,7 +230,7 @@ CREATE TABLE IF NOT EXISTS public.question_answers (
 
 CREATE INDEX IF NOT EXISTS idx_question_answers_question_id ON public.question_answers(question_id);
 
--- 13. TABEL MATCHING_PAIRS (Pasangan Soal Menjodohkan)
+-- 13. TABEL MATCHING_PAIRS
 CREATE TABLE IF NOT EXISTS public.matching_pairs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     question_id UUID NOT NULL REFERENCES public.questions(id) ON DELETE CASCADE,
@@ -275,7 +243,7 @@ CREATE TABLE IF NOT EXISTS public.matching_pairs (
 
 CREATE INDEX IF NOT EXISTS idx_matching_pairs_question_id ON public.matching_pairs(question_id);
 
--- 14. TABEL EXAMS (Jadwal & Paket Ujian)
+-- 14. TABEL EXAMS
 CREATE TABLE IF NOT EXISTS public.exams (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     title TEXT NOT NULL,
@@ -299,7 +267,6 @@ CREATE TABLE IF NOT EXISTS public.exams (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Auto-Repair Kolom Exams
 ALTER TABLE IF EXISTS public.exams ADD COLUMN IF NOT EXISTS target_class_ids UUID[] DEFAULT '{}';
 ALTER TABLE IF EXISTS public.exams ADD COLUMN IF NOT EXISTS randomize_questions BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE IF EXISTS public.exams ADD COLUMN IF NOT EXISTS randomize_options BOOLEAN NOT NULL DEFAULT true;
@@ -311,7 +278,7 @@ CREATE INDEX IF NOT EXISTS idx_exams_subject_id ON public.exams(subject_id);
 CREATE INDEX IF NOT EXISTS idx_exams_teacher_id ON public.exams(teacher_id);
 CREATE INDEX IF NOT EXISTS idx_exams_schedule ON public.exams(start_at, end_at);
 
--- 15. TABEL EXAM_QUESTIONS (Relasi Butir Soal Terpasang pada Ujian)
+-- 15. TABEL EXAM_QUESTIONS
 CREATE TABLE IF NOT EXISTS public.exam_questions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     exam_id UUID NOT NULL REFERENCES public.exams(id) ON DELETE CASCADE,
@@ -326,7 +293,7 @@ CREATE TABLE IF NOT EXISTS public.exam_questions (
 CREATE INDEX IF NOT EXISTS idx_exam_questions_exam_id ON public.exam_questions(exam_id);
 CREATE INDEX IF NOT EXISTS idx_exam_questions_question_id ON public.exam_questions(question_id);
 
--- 16. TABEL EXAM_ASSIGNMENTS (Penugasan Ujian ke Kelas/Siswa)
+-- 16. TABEL EXAM_ASSIGNMENTS
 CREATE TABLE IF NOT EXISTS public.exam_assignments (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     exam_id UUID NOT NULL REFERENCES public.exams(id) ON DELETE CASCADE,
@@ -364,7 +331,6 @@ CREATE TABLE IF NOT EXISTS public.exam_attempts (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Auto-Repair Kolom Exam Attempts
 ALTER TABLE IF EXISTS public.exam_attempts ADD COLUMN IF NOT EXISTS question_order JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE IF EXISTS public.exam_attempts ADD COLUMN IF NOT EXISTS option_order JSONB DEFAULT '{}'::jsonb;
 ALTER TABLE IF EXISTS public.exam_attempts ADD COLUMN IF NOT EXISTS answers JSONB DEFAULT '{}'::jsonb;
@@ -379,7 +345,7 @@ CREATE INDEX IF NOT EXISTS idx_exam_attempts_exam_id ON public.exam_attempts(exa
 CREATE INDEX IF NOT EXISTS idx_exam_attempts_student_id ON public.exam_attempts(student_id);
 CREATE INDEX IF NOT EXISTS idx_exam_attempts_status ON public.exam_attempts(status);
 
--- 18. TABEL STUDENT_ANSWERS (Detail Lembar Jawaban Siswa per Butir)
+-- 18. TABEL STUDENT_ANSWERS
 CREATE TABLE IF NOT EXISTS public.student_answers (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     attempt_id UUID NOT NULL REFERENCES public.exam_attempts(id) ON DELETE CASCADE,
@@ -397,7 +363,7 @@ CREATE TABLE IF NOT EXISTS public.student_answers (
 CREATE INDEX IF NOT EXISTS idx_student_answers_attempt ON public.student_answers(attempt_id);
 CREATE INDEX IF NOT EXISTS idx_student_answers_question ON public.student_answers(question_id);
 
--- 19. TABEL AUDIT_LOGS (Pencatatan Audit Trail Aktivitas & Keamanan)
+-- 19. TABEL AUDIT_LOGS
 CREATE TABLE IF NOT EXISTS public.audit_logs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     action TEXT NOT NULL,
@@ -415,7 +381,7 @@ CREATE TABLE IF NOT EXISTS public.audit_logs (
 CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON public.audit_logs(action);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON public.audit_logs(created_at DESC);
 
--- 20. TABEL GRADE_CATEGORY_CONFIGS (Kategori Nilai Predikat A, B, C, D)
+-- 20. TABEL GRADE_CATEGORY_CONFIGS
 CREATE TABLE IF NOT EXISTS public.grade_category_configs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     min_score NUMERIC(5,2) NOT NULL,
@@ -432,8 +398,6 @@ CREATE TABLE IF NOT EXISTS public.grade_category_configs (
 -- ==============================================================================
 -- 21. ROW LEVEL SECURITY (RLS) POLICIES
 -- ==============================================================================
-
--- Aktifkan RLS di semua tabel
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.majors ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.classes ENABLE ROW LEVEL SECURITY;
@@ -453,7 +417,6 @@ ALTER TABLE public.student_answers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.grade_category_configs ENABLE ROW LEVEL SECURITY;
 
--- Helper functions
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS BOOLEAN AS $$
 BEGIN
@@ -474,17 +437,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
 
--- Profiles: Authenticated users can read profiles, users update own profile, admin manages all
 DROP POLICY IF EXISTS "profiles_select_all" ON public.profiles;
 CREATE POLICY "profiles_select_all" ON public.profiles FOR SELECT TO authenticated USING (true);
-
 DROP POLICY IF EXISTS "profiles_update_own" ON public.profiles;
 CREATE POLICY "profiles_update_own" ON public.profiles FOR UPDATE TO authenticated USING (auth.uid() = id);
-
 DROP POLICY IF EXISTS "profiles_admin_all" ON public.profiles;
 CREATE POLICY "profiles_admin_all" ON public.profiles FOR ALL TO authenticated USING (public.is_admin());
 
--- Master Data: Everyone authenticated can read; Admin can modify
 DROP POLICY IF EXISTS "majors_read" ON public.majors;
 CREATE POLICY "majors_read" ON public.majors FOR SELECT TO authenticated USING (true);
 DROP POLICY IF EXISTS "majors_admin" ON public.majors;
@@ -515,7 +474,6 @@ CREATE POLICY "students_read" ON public.students FOR SELECT TO authenticated USI
 DROP POLICY IF EXISTS "students_admin" ON public.students;
 CREATE POLICY "students_admin" ON public.students FOR ALL TO authenticated USING (public.is_admin());
 
--- Questions & Items: Teachers & Admins can read and manage; Students access via RPC
 DROP POLICY IF EXISTS "questions_staff" ON public.questions;
 CREATE POLICY "questions_staff" ON public.questions FOR ALL TO authenticated
 USING (public.is_admin() OR public.is_teacher());
@@ -532,7 +490,6 @@ DROP POLICY IF EXISTS "matching_pairs_staff" ON public.matching_pairs;
 CREATE POLICY "matching_pairs_staff" ON public.matching_pairs FOR ALL TO authenticated
 USING (public.is_admin() OR public.is_teacher());
 
--- Exams: All authenticated can read; Teachers & Admin can manage
 DROP POLICY IF EXISTS "exams_read" ON public.exams;
 CREATE POLICY "exams_read" ON public.exams FOR SELECT TO authenticated USING (true);
 DROP POLICY IF EXISTS "exams_staff" ON public.exams;
@@ -551,7 +508,6 @@ DROP POLICY IF EXISTS "exam_assignments_staff" ON public.exam_assignments;
 CREATE POLICY "exam_assignments_staff" ON public.exam_assignments FOR ALL TO authenticated
 USING (public.is_admin() OR public.is_teacher());
 
--- Exam Attempts: Student accesses own attempts; Admin & Teachers access all
 DROP POLICY IF EXISTS "attempts_student_select" ON public.exam_attempts;
 CREATE POLICY "attempts_student_select" ON public.exam_attempts FOR SELECT TO authenticated
 USING (
@@ -561,31 +517,24 @@ USING (
 );
 
 DROP POLICY IF EXISTS "attempts_student_insert" ON public.exam_attempts;
-CREATE POLICY "attempts_student_insert" ON public.exam_attempts FOR INSERT TO authenticated
-WITH CHECK (true);
+CREATE POLICY "attempts_student_insert" ON public.exam_attempts FOR INSERT TO authenticated WITH CHECK (true);
 
 DROP POLICY IF EXISTS "attempts_update" ON public.exam_attempts;
-CREATE POLICY "attempts_update" ON public.exam_attempts FOR UPDATE TO authenticated
-USING (true);
+CREATE POLICY "attempts_update" ON public.exam_attempts FOR UPDATE TO authenticated USING (true);
 
--- Student Answers
 DROP POLICY IF EXISTS "student_answers_all" ON public.student_answers;
 CREATE POLICY "student_answers_all" ON public.student_answers FOR ALL TO authenticated USING (true);
 
--- Audit Logs: All can insert; Admin can read
 DROP POLICY IF EXISTS "audit_logs_insert" ON public.audit_logs;
 CREATE POLICY "audit_logs_insert" ON public.audit_logs FOR INSERT TO authenticated WITH CHECK (true);
-
 DROP POLICY IF EXISTS "audit_logs_select" ON public.audit_logs;
-CREATE POLICY "audit_logs_select" ON public.audit_logs FOR SELECT TO authenticated
-USING (public.is_admin());
+CREATE POLICY "audit_logs_select" ON public.audit_logs FOR SELECT TO authenticated USING (public.is_admin());
 
--- Grade Categories
 DROP POLICY IF EXISTS "grade_category_read" ON public.grade_category_configs;
 CREATE POLICY "grade_category_read" ON public.grade_category_configs FOR SELECT TO authenticated USING (true);
 
 -- ==============================================================================
--- 22. RPC FUNCTION: GET_STUDENT_EXAM_PAYLOAD (STRIPPED OF KEYS)
+-- 22. RPC: GET_STUDENT_EXAM_PAYLOAD (STRIPPED OF KEYS)
 -- ==============================================================================
 CREATE OR REPLACE FUNCTION public.get_student_exam_payload(
     p_exam_id UUID,
@@ -668,7 +617,7 @@ $$;
 -- 23. SEED MASTER DATA DASAR SMKN 1 SONGGOM (IDEMPOTENT)
 -- ==============================================================================
 
--- 23.1 SEED MAJORS (3 PROGRAM KEAHLIAN)
+-- 23.1 MAJORS (3 PROGRAM KEAHLIAN)
 INSERT INTO public.majors (id, code, name, description, status)
 VALUES
     ('a1111111-1111-1111-1111-111111111111', 'TJKT', 'Teknik Jaringan Komputer dan Telekomunikasi', 'Konsentrasi keahlian infrastruktur jaringan, server, fiber optic dan telekomunikasi.', 'active'),
@@ -676,7 +625,7 @@ VALUES
     ('a3333333-3333-3333-3333-333333333333', 'AKL', 'Akuntansi dan Keuangan Lembaga', 'Konsentrasi keahlian pembukuan digital, perpajakan, dan perbankan.', 'active')
 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, status = EXCLUDED.status;
 
--- 23.2 SEED CLASSES (3 KELAS)
+-- 23.2 CLASSES (3 KELAS)
 INSERT INTO public.classes (id, name, grade, major_id, academic_year, status)
 VALUES
     ('b1111111-1111-1111-1111-111111111111', 'X TJKT 1', 'X', 'a1111111-1111-1111-1111-111111111111', '2026/2027', 'active'),
@@ -684,7 +633,7 @@ VALUES
     ('b3333333-3333-3333-3333-333333333333', 'XII TKRO 1', 'XII', 'a2222222-2222-2222-2222-222222222222', '2026/2027', 'active')
 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, status = EXCLUDED.status;
 
--- 23.3 SEED SUBJECTS (3 MATA PELAJARAN DENGAN KATEGORI NON-NULL)
+-- 23.3 SUBJECTS (3 MATA PELAJARAN DENGAN KATEGORI NON-NULL)
 INSERT INTO public.subjects (id, code, name, description, category, status)
 VALUES
     ('c1111111-1111-1111-1111-111111111111', 'AIJ', 'Administrasi Infrastruktur Jaringan', 'Routing statik & dinamik, VLAN, firewall, NAT dan monitoring traffic jaringan.', 'Kejuruan', 'active'),
@@ -692,7 +641,7 @@ VALUES
     ('c3333333-3333-3333-3333-333333333333', 'BIND', 'Bahasa Indonesia Kejuruan', 'Penyusunan laporan teknis ilmiah, proposal kerja industri, dan tata bahasa formal.', 'Umum', 'active')
 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, status = EXCLUDED.status, category = EXCLUDED.category;
 
--- 23.4 SEED TEACHERS (3 GURU)
+-- 23.4 TEACHERS (3 GURU)
 INSERT INTO public.teachers (id, nip, full_name, email, phone_number, status)
 VALUES
     ('d2222222-2222-2222-2222-222222222222', '198803152014022003', 'Siti Aminah, S.Kom., Gr.', 'guru@smk.id', '0857-1122-3344', 'active'),
@@ -700,7 +649,7 @@ VALUES
     ('d4444444-4444-4444-4444-444444444444', '199208222019032007', 'Dewi Lestari, M.Pd.', 'dewi.lestari@smk.id', '0819-3344-5566', 'active')
 ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, status = EXCLUDED.status;
 
--- 23.5 SEED TEACHER_SUBJECTS (RELASI PENGAMPU)
+-- 23.5 TEACHER_SUBJECTS (RELASI PENGAMPU)
 INSERT INTO public.teacher_subjects (id, teacher_id, subject_id)
 VALUES
     ('d5555555-5555-5555-5555-555555555551', 'd2222222-2222-2222-2222-222222222222', 'c1111111-1111-1111-1111-111111111111'),
@@ -708,7 +657,7 @@ VALUES
     ('d5555555-5555-5555-5555-555555555553', 'd4444444-4444-4444-4444-444444444444', 'c3333333-3333-3333-3333-333333333333')
 ON CONFLICT (teacher_id, subject_id) DO NOTHING;
 
--- 23.6 SEED STUDENTS (3 PESERTA DIDIK)
+-- 23.6 STUDENTS (3 PESERTA DIDIK)
 INSERT INTO public.students (id, nis, nisn, full_name, email, phone_number, class_id, major_id, status)
 VALUES
     ('e1111111-1111-1111-1111-111111111111', '21001', '0051234567', 'Budi Siswa Pratama', 'siswa@smk.id', '0812-3456-7890', 'b2222222-2222-2222-2222-222222222222', 'a1111111-1111-1111-1111-111111111111', 'active'),
@@ -716,16 +665,16 @@ VALUES
     ('e3333333-3333-3333-3333-333333333333', '21003', '0051234569', 'Siti Nurhaliza', 'siti.nurhaliza@smk.id', '0813-7788-9900', 'b3333333-3333-3333-3333-333333333333', 'a2222222-2222-2222-2222-222222222222', 'active')
 ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, status = EXCLUDED.status;
 
--- 23.7 SEED GRADE CATEGORY CONFIGS (PREDIKAT NILAI)
+-- 23.7 GRADE CATEGORY CONFIGS
 INSERT INTO public.grade_category_configs (id, min_score, max_score, code, label, badge_class, color, order_num, description)
 VALUES
-    ('0c111111-1111-1111-1111-111111111111', 90.00, 100.00, 'A', 'Sangat Baik', 'bg-emerald-100 text-emerald-800 border-emerald-300', '#059669', 1, 'Menguasai seluruh kompetensi kejuruan dengan predikat istimewa.'),
-    ('0c222222-2222-2222-2222-222222222222', 80.00, 89.99, 'B', 'Baik', 'bg-blue-100 text-blue-800 border-blue-300', '#2563eb', 2, 'Menguasai kompetensi kejuruan dengan tuntas.'),
-    ('0c333333-3333-3333-3333-333333333333', 70.00, 79.99, 'C', 'Cukup', 'bg-amber-100 text-amber-800 border-amber-300', '#d97706', 3, 'Memenuhi standar minimal KKM dengan pendampingan.'),
-    ('0c444444-4444-4444-4444-444444444444', 0.00, 69.99, 'D', 'Perlu Bimbingan', 'bg-rose-100 text-rose-800 border-rose-300', '#e11d48', 4, 'Belum tuntas, wajib mengikuti program remedial.')
+    ('gc111111-1111-1111-1111-111111111111', 90.00, 100.00, 'A', 'Sangat Baik', 'bg-emerald-100 text-emerald-800 border-emerald-300', '#059669', 1, 'Menguasai seluruh kompetensi kejuruan dengan predikat istimewa.'),
+    ('gc222222-2222-2222-2222-222222222222', 80.00, 89.99, 'B', 'Baik', 'bg-blue-100 text-blue-800 border-blue-300', '#2563eb', 2, 'Menguasai kompetensi kejuruan dengan tuntas.'),
+    ('gc333333-3333-3333-3333-333333333333', 70.00, 79.99, 'C', 'Cukup', 'bg-amber-100 text-amber-800 border-amber-300', '#d97706', 3, 'Memenuhi standar minimal KKM dengan pendampingan.'),
+    ('gc444444-4444-4444-4444-444444444444', 0.00, 69.99, 'D', 'Perlu Bimbingan', 'bg-rose-100 text-rose-800 border-rose-300', '#e11d48', 4, 'Belum tuntas, wajib mengikuti program remedial.')
 ON CONFLICT (id) DO UPDATE SET label = EXCLUDED.label, min_score = EXCLUDED.min_score, max_score = EXCLUDED.max_score;
 
--- 23.8 SEED QUESTIONS (4 TIPE SOAL: PG BIASA, PG KOMPLEKS, MENJODOHKAN, ESAI)
+-- 23.8 QUESTIONS (4 TIPE SOAL TKA)
 INSERT INTO public.questions (
     id, code, subject_id, teacher_id, grade, question_type, difficulty,
     points, question_text, explanation, status, scoring_method
@@ -783,37 +732,37 @@ VALUES
         'hard',
         25.00,
         'Jelaskan perbedaan mendasar antara routing statik dan routing dinamik, serta sebutkan satu contoh skenario kapan sebuah instansi sekolah sebaiknya beralih dari routing statik ke routing dinamik!',
-        'Routing statik dikonfigurasi secara manual untuk tiap rute, sedangkan routing dinamik saling bertukar tabel routing secara otomatis melalui protokol seperti OSPF.',
+        'Routing statik dikonfigurasi secara manual untuk tiap rute, sedangkan routing dinamik saling bertukar tabel routing secara otomatis menggunakan routing protocol (seperti OSPF atau BGP). Sekolah sebaiknya beralih ke routing dinamik ketika jumlah gedung/router bertambah banyak dan membutuhkan jalur failover otomatis ketika salah satu link fiber optic terputus.',
         'active',
         'manual'
     )
 ON CONFLICT (id) DO UPDATE SET question_text = EXCLUDED.question_text, status = EXCLUDED.status;
 
--- 23.9 SEED QUESTION_OPTIONS (UNTUK SOAL PG BIASA & PG KOMPLEKS)
+-- 23.9 QUESTION_OPTIONS
 INSERT INTO public.question_options (id, question_id, option_key, option_text, is_correct, order_num)
 VALUES
-    ('0b111111-1111-1111-1111-111111111111', 'f1111111-1111-1111-1111-111111111111', 'A', 'DHCP Server', false, 1),
-    ('0b111111-1111-1111-1111-111111111112', 'f1111111-1111-1111-1111-111111111111', 'B', 'NAT (Network Address Translation)', true, 2),
-    ('0b111111-1111-1111-1111-111111111113', 'f1111111-1111-1111-1111-111111111111', 'C', 'DNS Resolver', false, 3),
-    ('0b111111-1111-1111-1111-111111111114', 'f1111111-1111-1111-1111-111111111111', 'D', 'Proxy Server Squid', false, 4),
-    ('0b111111-1111-1111-1111-111111111115', 'f1111111-1111-1111-1111-111111111111', 'E', 'NTP Client Sync', false, 5),
-    ('0b222222-2222-2222-2222-222222222221', 'f2222222-2222-2222-2222-222222222222', 'A', 'Mempersempit domain broadcast jaringan lokal', true, 1),
-    ('0b222222-2222-2222-2222-222222222222', 'f2222222-2222-2222-2222-222222222222', 'B', 'Meningkatkan keamanan dengan segmentasi logis antar departemen', true, 2),
-    ('0b222222-2222-2222-2222-222222222223', 'f2222222-2222-2222-2222-222222222222', 'C', 'Menggantikan fungsi kabel fisik menjadi sepenuhnya nirkabel', false, 3),
-    ('0b222222-2222-2222-2222-222222222224', 'f2222222-2222-2222-2222-222222222222', 'D', 'Memudahkan manajemen jaringan tanpa merombak kabel fisik', true, 4),
-    ('0b222222-2222-2222-2222-222222222225', 'f2222222-2222-2222-2222-222222222222', 'E', 'Otomatis memperbesar kapasitas kecepatan ISP sekolah 10x lipat', false, 5)
+    ('o1111111-1111-1111-1111-111111111111', 'f1111111-1111-1111-1111-111111111111', 'A', 'DHCP Server', false, 1),
+    ('o1111111-1111-1111-1111-111111111112', 'f1111111-1111-1111-1111-111111111111', 'B', 'NAT (Network Address Translation)', true, 2),
+    ('o1111111-1111-1111-1111-111111111113', 'f1111111-1111-1111-1111-111111111111', 'C', 'DNS Resolver', false, 3),
+    ('o1111111-1111-1111-1111-111111111114', 'f1111111-1111-1111-1111-111111111111', 'D', 'Proxy Server Squid', false, 4),
+    ('o1111111-1111-1111-1111-111111111115', 'f1111111-1111-1111-1111-111111111111', 'E', 'NTP Client Sync', false, 5),
+    ('o2222222-2222-2222-2222-222222222221', 'f2222222-2222-2222-2222-222222222222', 'A', 'Mempersempit domain broadcast jaringan lokal', true, 1),
+    ('o2222222-2222-2222-2222-222222222222', 'f2222222-2222-2222-2222-222222222222', 'B', 'Meningkatkan keamanan dengan segmentasi logis antar departemen', true, 2),
+    ('o2222222-2222-2222-2222-222222222223', 'f2222222-2222-2222-2222-222222222222', 'C', 'Menggantikan fungsi kabel fisik menjadi sepenuhnya nirkabel', false, 3),
+    ('o2222222-2222-2222-2222-222222222224', 'f2222222-2222-2222-2222-222222222222', 'D', 'Memudahkan manajemen jaringan tanpa merombak kabel fisik', true, 4),
+    ('o2222222-2222-2222-2222-222222222225', 'f2222222-2222-2222-2222-222222222222', 'E', 'Otomatis memperbesar kapasitas kecepatan ISP sekolah 10x lipat', false, 5)
 ON CONFLICT (id) DO UPDATE SET option_text = EXCLUDED.option_text, is_correct = EXCLUDED.is_correct;
 
--- 23.10 SEED MATCHING_PAIRS
+-- 23.10 MATCHING_PAIRS
 INSERT INTO public.matching_pairs (id, question_id, left_item, right_item, correct_match_key, order_num)
 VALUES
-    ('0d111111-1111-1111-1111-111111111111', 'f3333333-3333-3333-3333-333333333333', 'Port 80', 'HTTP', 'HTTP', 1),
-    ('0d111111-1111-1111-1111-111111111112', 'f3333333-3333-3333-3333-333333333333', 'Port 443', 'HTTPS', 'HTTPS', 2),
-    ('0d111111-1111-1111-1111-111111111113', 'f3333333-3333-3333-3333-333333333333', 'Port 22', 'SSH', 'SSH', 3),
-    ('0d111111-1111-1111-1111-111111111114', 'f3333333-3333-3333-3333-333333333333', 'Port 53', 'DNS', 'DNS', 4)
+    ('m1111111-1111-1111-1111-111111111111', 'f3333333-3333-3333-3333-333333333333', 'Port 80', 'HTTP', 'HTTP', 1),
+    ('m1111111-1111-1111-1111-111111111112', 'f3333333-3333-3333-3333-333333333333', 'Port 443', 'HTTPS', 'HTTPS', 2),
+    ('m1111111-1111-1111-1111-111111111113', 'f3333333-3333-3333-3333-333333333333', 'Port 22', 'SSH', 'SSH', 3),
+    ('m1111111-1111-1111-1111-111111111114', 'f3333333-3333-3333-3333-333333333333', 'Port 53', 'DNS', 'DNS', 4)
 ON CONFLICT (id) DO UPDATE SET left_item = EXCLUDED.left_item, right_item = EXCLUDED.right_item;
 
--- 23.11 SEED QUESTION_ANSWERS (KUNCI JAWABAN ESAI)
+-- 23.11 QUESTION_ANSWERS
 INSERT INTO public.question_answers (id, question_id, reference_answer, keywords, sample_rubric)
 VALUES
     (
@@ -825,7 +774,7 @@ VALUES
     )
 ON CONFLICT (question_id) DO UPDATE SET reference_answer = EXCLUDED.reference_answer, keywords = EXCLUDED.keywords;
 
--- 23.12 SEED EXAMS (UJIAN KEJURUAN TKA)
+-- 23.12 EXAMS (UJIAN KEJURUAN TKA)
 INSERT INTO public.exams (
     id, title, description, subject_id, teacher_id, grade, major_id,
     target_class_ids, start_at, end_at, duration_minutes, total_questions,
@@ -854,210 +803,102 @@ VALUES
     )
 ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, status = EXCLUDED.status;
 
--- 23.13 SEED EXAM_QUESTIONS
+-- 23.13 EXAM_QUESTIONS
 INSERT INTO public.exam_questions (id, exam_id, question_id, order_num, points)
 VALUES
-    ('0e111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111111', 'f1111111-1111-1111-1111-111111111111', 1, 25.00),
-    ('0e222222-2222-2222-2222-222222222222', '11111111-1111-1111-1111-111111111111', 'f2222222-2222-2222-2222-222222222222', 2, 25.00),
-    ('0e333333-3333-3333-3333-333333333333', '11111111-1111-1111-1111-111111111111', 'f3333333-3333-3333-3333-333333333333', 3, 25.00),
-    ('0e444444-4444-4444-4444-444444444444', '11111111-1111-1111-1111-111111111111', 'f4444444-4444-4444-4444-444444444444', 4, 25.00)
+    ('eq111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111111', 'f1111111-1111-1111-1111-111111111111', 1, 25.00),
+    ('eq222222-2222-2222-2222-222222222222', '11111111-1111-1111-1111-111111111111', 'f2222222-2222-2222-2222-222222222222', 2, 25.00),
+    ('eq333333-3333-3333-3333-333333333333', '11111111-1111-1111-1111-111111111111', 'f3333333-3333-3333-3333-333333333333', 3, 25.00),
+    ('eq444444-4444-4444-4444-444444444444', '11111111-1111-1111-1111-111111111111', 'f4444444-4444-4444-4444-444444444444', 4, 25.00)
 ON CONFLICT (exam_id, question_id) DO UPDATE SET points = EXCLUDED.points;
 
--- 23.14 SEED EXAM_ASSIGNMENTS (KELAS XI TJKT 1)
+-- 23.14 EXAM_ASSIGNMENTS (KELAS XI TJKT 1)
 INSERT INTO public.exam_assignments (id, exam_id, class_id, can_take)
 VALUES
-    ('0a111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111111', 'b2222222-2222-2222-2222-222222222222', true)
+    ('ea111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111111', 'b2222222-2222-2222-2222-222222222222', true)
 ON CONFLICT (id) DO NOTHING;
 
 -- ==============================================================================
--- 24. PEMBUATAN AKUN PENGGUNA RESMI DI AUTH.USERS & PUBLIC.PROFILES SECARA LANGSUNG
+-- 24. HELPER AUTH & IDENTITIES BEBAS ERROR 42804
 -- ==============================================================================
--- Memperbaiki fungsi trigger auth agar tidak pernah menggagalkan pendaftaran Supabase Auth
-CREATE OR REPLACE FUNCTION public.handle_new_auth_user()
-RETURNS TRIGGER 
-SECURITY DEFINER
-SET search_path = public
+CREATE OR REPLACE FUNCTION public.ensure_auth_identity(p_user_id UUID, p_email TEXT)
+RETURNS VOID
 LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth
 AS $$
+DECLARE
+    v_has_provider_id BOOLEAN;
+    v_id_type TEXT;
+    v_clean_email TEXT;
+    v_identity_data JSONB;
 BEGIN
-    INSERT INTO public.profiles (
-        id, 
-        email, 
-        full_name, 
-        role, 
-        status,
-        created_at,
-        updated_at
-    )
-    VALUES (
-        NEW.id,
-        NEW.email,
-        COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1)),
-        COALESCE(NEW.raw_user_meta_data->>'role', 'siswa'),
-        'active',
-        NOW(),
-        NOW()
-    )
-    ON CONFLICT (id) DO UPDATE
-    SET email = EXCLUDED.email,
-        full_name = COALESCE(EXCLUDED.full_name, public.profiles.full_name);
-    RETURN NEW;
-EXCEPTION
-    WHEN OTHERS THEN
-        RETURN NEW;
+    IF p_user_id IS NULL OR p_email IS NULL OR trim(p_email) = '' THEN
+        RETURN;
+    END IF;
+
+    v_clean_email := LOWER(trim(p_email));
+    v_identity_data := jsonb_build_object(
+        'sub', p_user_id::text,
+        'email', v_clean_email,
+        'email_verified', true
+    );
+
+    SELECT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'auth' AND table_name = 'identities' AND column_name = 'provider_id'
+    ) INTO v_has_provider_id;
+
+    SELECT COALESCE(data_type, 'uuid') INTO v_id_type
+    FROM information_schema.columns 
+    WHERE table_schema = 'auth' AND table_name = 'identities' AND column_name = 'id';
+
+    UPDATE auth.users
+    SET email_confirmed_at = COALESCE(email_confirmed_at, NOW()),
+        raw_app_meta_data = '{"provider":"email","providers":["email"]}'::jsonb
+    WHERE id = p_user_id;
+
+    DELETE FROM auth.identities WHERE user_id = p_user_id AND provider = 'email';
+
+    IF v_id_type = 'uuid' THEN
+        DELETE FROM auth.identities WHERE id = p_user_id;
+
+        IF v_has_provider_id THEN
+            EXECUTE 'INSERT INTO auth.identities (id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at)
+                     VALUES ($1, $2, $3, ''email'', $4, NOW(), NOW(), NOW())
+                     ON CONFLICT DO NOTHING'
+            USING p_user_id, p_user_id, v_identity_data, p_user_id::text;
+        ELSE
+            EXECUTE 'INSERT INTO auth.identities (id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at)
+                     VALUES ($1, $2, $3, ''email'', NOW(), NOW(), NOW())
+                     ON CONFLICT DO NOTHING'
+            USING p_user_id, p_user_id, v_identity_data;
+        END IF;
+    ELSE
+        DELETE FROM auth.identities WHERE id = p_user_id::text;
+
+        IF v_has_provider_id THEN
+            EXECUTE 'INSERT INTO auth.identities (id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at)
+                     VALUES ($1, $2, $3, ''email'', $4, NOW(), NOW(), NOW())
+                     ON CONFLICT DO NOTHING'
+            USING p_user_id::text, p_user_id, v_identity_data, p_user_id::text;
+        ELSE
+            EXECUTE 'INSERT INTO auth.identities (id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at)
+                     VALUES ($1, $2, $3, ''email'', NOW(), NOW(), NOW())
+                     ON CONFLICT DO NOTHING'
+            USING p_user_id::text, p_user_id, v_identity_data;
+        END IF;
+    END IF;
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'Notice ensure_auth_identity (%): %', p_email, SQLERRM;
 END;
 $$;
 
-DO $$ BEGIN
-    DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-    DROP TRIGGER IF EXISTS trg_handle_new_user ON auth.users;
-    DROP TRIGGER IF EXISTS handle_new_user_trigger ON auth.users;
-    CREATE TRIGGER on_auth_user_created
-      AFTER INSERT ON auth.users
-      FOR EACH ROW EXECUTE FUNCTION public.handle_new_auth_user();
-EXCEPTION
-    WHEN OTHERS THEN
-        RAISE NOTICE 'Trigger auth.users dilewati (dikelola oleh Supabase Auth): %', SQLERRM;
-END $$;
-
--- 24.2 PROVISI LANGSUNG AKUN-AKUN RESMI KE DALAM AUTH.USERS
-DO $$
-DECLARE
-    v_admin_id UUID := '00000000-0000-0000-0000-000000000001';
-    v_admin2_id UUID := '00000000-0000-0000-0000-000000000002';
-    v_guru_id UUID := '00000000-0000-0000-0000-000000000003';
-    v_siswa_id UUID := '00000000-0000-0000-0000-000000000004';
-BEGIN
-    -- 1. AKUN ADMIN UTAMA: karyono621@guru.smk.belajar.id (Password: AdminTKA2026!)
-    IF NOT EXISTS (SELECT 1 FROM auth.users WHERE email = 'karyono621@guru.smk.belajar.id') THEN
-        INSERT INTO auth.users (
-            id, instance_id, aud, role, email, encrypted_password,
-            email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
-            created_at, updated_at, confirmation_token, recovery_token, email_change_token_new, email_change
-        ) VALUES (
-            v_admin_id,
-            '00000000-0000-0000-0000-000000000000',
-            'authenticated',
-            'authenticated',
-            'karyono621@guru.smk.belajar.id',
-            crypt('AdminTKA2026!', gen_salt('bf')),
-            NOW(),
-            '{"provider":"email","providers":["email"]}'::jsonb,
-            '{"full_name":"Karyono (Administrator TKA)","role":"admin"}'::jsonb,
-            NOW(), NOW(), '', '', '', ''
-        );
-    ELSE
-        SELECT id INTO v_admin_id FROM auth.users WHERE email = 'karyono621@guru.smk.belajar.id';
-        UPDATE auth.users SET encrypted_password = crypt('AdminTKA2026!', gen_salt('bf')) WHERE id = v_admin_id;
-    END IF;
-
-    INSERT INTO public.profiles (id, email, full_name, role, status)
-    VALUES (v_admin_id, 'karyono621@guru.smk.belajar.id', 'Karyono (Administrator TKA)', 'admin', 'active')
-    ON CONFLICT (id) DO UPDATE SET role = 'admin', status = 'active';
-
-    -- 2. AKUN ADMIN SEKOLAH: admin@smk.id (Password: AdminTKA2026!)
-    IF NOT EXISTS (SELECT 1 FROM auth.users WHERE email = 'admin@smk.id') THEN
-        INSERT INTO auth.users (
-            id, instance_id, aud, role, email, encrypted_password,
-            email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
-            created_at, updated_at, confirmation_token, recovery_token, email_change_token_new, email_change
-        ) VALUES (
-            v_admin2_id,
-            '00000000-0000-0000-0000-000000000000',
-            'authenticated',
-            'authenticated',
-            'admin@smk.id',
-            crypt('AdminTKA2026!', gen_salt('bf')),
-            NOW(),
-            '{"provider":"email","providers":["email"]}'::jsonb,
-            '{"full_name":"Administrator SMKN 1 Songgom","role":"admin"}'::jsonb,
-            NOW(), NOW(), '', '', '', ''
-        );
-    ELSE
-        SELECT id INTO v_admin2_id FROM auth.users WHERE email = 'admin@smk.id';
-        UPDATE auth.users SET encrypted_password = crypt('AdminTKA2026!', gen_salt('bf')) WHERE id = v_admin2_id;
-    END IF;
-
-    INSERT INTO public.profiles (id, email, full_name, role, status)
-    VALUES (v_admin2_id, 'admin@smk.id', 'Administrator SMKN 1 Songgom', 'admin', 'active')
-    ON CONFLICT (id) DO UPDATE SET role = 'admin', status = 'active';
-
-    -- 3. AKUN GURU RESMI: guru@smk.id (Password: GuruTKA2026!)
-    IF NOT EXISTS (SELECT 1 FROM auth.users WHERE email = 'guru@smk.id') THEN
-        INSERT INTO auth.users (
-            id, instance_id, aud, role, email, encrypted_password,
-            email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
-            created_at, updated_at, confirmation_token, recovery_token, email_change_token_new, email_change
-        ) VALUES (
-            v_guru_id,
-            '00000000-0000-0000-0000-000000000000',
-            'authenticated',
-            'authenticated',
-            'guru@smk.id',
-            crypt('GuruTKA2026!', gen_salt('bf')),
-            NOW(),
-            '{"provider":"email","providers":["email"]}'::jsonb,
-            '{"full_name":"Siti Aminah, S.Kom., Gr.","role":"guru"}'::jsonb,
-            NOW(), NOW(), '', '', '', ''
-        );
-    ELSE
-        SELECT id INTO v_guru_id FROM auth.users WHERE email = 'guru@smk.id';
-        UPDATE auth.users SET encrypted_password = crypt('GuruTKA2026!', gen_salt('bf')) WHERE id = v_guru_id;
-    END IF;
-
-    INSERT INTO public.profiles (id, email, full_name, role, status, nip)
-    VALUES (v_guru_id, 'guru@smk.id', 'Siti Aminah, S.Kom., Gr.', 'guru', 'active', '198803152014022003')
-    ON CONFLICT (id) DO UPDATE SET role = 'guru', status = 'active';
-
-    UPDATE public.teachers SET user_id = v_guru_id WHERE email = 'guru@smk.id';
-
-    -- 4. AKUN SISWA RESMI: siswa@smk.id (Password: SiswaTKA2026!)
-    IF NOT EXISTS (SELECT 1 FROM auth.users WHERE email = 'siswa@smk.id') THEN
-        INSERT INTO auth.users (
-            id, instance_id, aud, role, email, encrypted_password,
-            email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
-            created_at, updated_at, confirmation_token, recovery_token, email_change_token_new, email_change
-        ) VALUES (
-            v_siswa_id,
-            '00000000-0000-0000-0000-000000000000',
-            'authenticated',
-            'authenticated',
-            'siswa@smk.id',
-            crypt('SiswaTKA2026!', gen_salt('bf')),
-            NOW(),
-            '{"provider":"email","providers":["email"]}'::jsonb,
-            '{"full_name":"Budi Siswa Pratama","role":"siswa"}'::jsonb,
-            NOW(), NOW(), '', '', '', ''
-        );
-    ELSE
-        SELECT id INTO v_siswa_id FROM auth.users WHERE email = 'siswa@smk.id';
-        UPDATE auth.users SET encrypted_password = crypt('SiswaTKA2026!', gen_salt('bf')) WHERE id = v_siswa_id;
-    END IF;
-
-    INSERT INTO public.profiles (id, email, full_name, role, status, nis, nisn, class_name, major_name)
-    VALUES (v_siswa_id, 'siswa@smk.id', 'Budi Siswa Pratama', 'siswa', 'active', '21001', '0051234567', 'XI TJKT 1', 'Teknik Jaringan Komputer dan Telekomunikasi')
-    ON CONFLICT (id) DO UPDATE SET role = 'siswa', status = 'active';
-
-    UPDATE public.students SET user_id = v_siswa_id WHERE email = 'siswa@smk.id';
-
-    -- SINKRONKAN IDENTITAS EMAIL KE auth.identities UNTUK SEMUA AKUN BAWAAN
-    DELETE FROM auth.identities WHERE provider = 'email' AND user_id IN (v_admin_id, v_admin2_id, v_guru_id, v_siswa_id);
-    
-    INSERT INTO auth.identities (id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at)
-    VALUES 
-        (v_admin_id::text, v_admin_id, jsonb_build_object('sub', v_admin_id::text, 'email', 'karyono621@guru.smk.belajar.id', 'email_verified', true), 'email', v_admin_id::text, NOW(), NOW(), NOW()),
-        (v_admin2_id::text, v_admin2_id, jsonb_build_object('sub', v_admin2_id::text, 'email', 'admin@smk.id', 'email_verified', true), 'email', v_admin2_id::text, NOW(), NOW(), NOW()),
-        (v_guru_id::text, v_guru_id, jsonb_build_object('sub', v_guru_id::text, 'email', 'guru@smk.id', 'email_verified', true), 'email', v_guru_id::text, NOW(), NOW(), NOW()),
-        (v_siswa_id::text, v_siswa_id, jsonb_build_object('sub', v_siswa_id::text, 'email', 'siswa@smk.id', 'email_verified', true), 'email', v_siswa_id::text, NOW(), NOW(), NOW())
-    ON CONFLICT DO NOTHING;
-
-END $$;
+GRANT EXECUTE ON FUNCTION public.ensure_auth_identity(UUID, TEXT) TO anon, authenticated, service_role, postgres;
 
 -- ==============================================================================
--- 24. FUNGSI RESOLUSI IDENTIFIER & ADMIN USER MANAGEMENT LENGKAP
+-- 25. RESOLUSI LOGIN VIA NIS, NISN, NIP, ATAU EMAIL
 -- ==============================================================================
-
--- A. FUNGSI RESOLUSI NIS/NIP KE EMAIL (SECURITY DEFINER - DAPAT DIAKSES SAAT LOGIN SEBELUM AUTENTIKASI)
 CREATE OR REPLACE FUNCTION public.get_email_by_identifier(p_identifier TEXT)
 RETURNS TEXT
 LANGUAGE plpgsql
@@ -1078,25 +919,187 @@ BEGIN
         RETURN LOWER(v_clean_id);
     END IF;
 
-    SELECT email INTO v_email FROM public.profiles WHERE nis = v_clean_id OR LOWER(email) = LOWER(v_clean_id) LIMIT 1;
-    IF v_email IS NOT NULL THEN RETURN LOWER(v_email); END IF;
+    -- 1. Cari NIS di profiles
+    SELECT email INTO v_email
+    FROM public.profiles
+    WHERE nis = v_clean_id OR LOWER(email) = LOWER(v_clean_id)
+    LIMIT 1;
 
-    SELECT email INTO v_email FROM public.profiles WHERE nip = v_clean_id LIMIT 1;
-    IF v_email IS NOT NULL THEN RETURN LOWER(v_email); END IF;
+    IF v_email IS NOT NULL THEN
+        RETURN LOWER(v_email);
+    END IF;
 
-    SELECT email INTO v_email FROM public.students WHERE nis = v_clean_id OR nisn = v_clean_id LIMIT 1;
-    IF v_email IS NOT NULL THEN RETURN LOWER(v_email); END IF;
+    -- 2. Cari NIP di profiles
+    SELECT email INTO v_email
+    FROM public.profiles
+    WHERE nip = v_clean_id
+    LIMIT 1;
 
-    SELECT email INTO v_email FROM public.teachers WHERE nip = v_clean_id LIMIT 1;
-    IF v_email IS NOT NULL THEN RETURN LOWER(v_email); END IF;
+    IF v_email IS NOT NULL THEN
+        RETURN LOWER(v_email);
+    END IF;
+
+    -- 3. Cari di students (NIS atau NISN)
+    SELECT email INTO v_email
+    FROM public.students
+    WHERE nis = v_clean_id OR nisn = v_clean_id
+    LIMIT 1;
+
+    IF v_email IS NOT NULL THEN
+        RETURN LOWER(v_email);
+    END IF;
+
+    -- 4. Cari di teachers (NIP)
+    SELECT email INTO v_email
+    FROM public.teachers
+    WHERE nip = v_clean_id
+    LIMIT 1;
+
+    IF v_email IS NOT NULL THEN
+        RETURN LOWER(v_email);
+    END IF;
 
     RETURN NULL;
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.get_email_by_identifier(TEXT) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.get_email_by_identifier(TEXT) TO anon, authenticated, service_role, postgres;
 
--- B. FUNGSI ADMIN: BUAT ATAU PERBARUI AKUN SISWA / GURU (DENGAN SINKRONISASI auth.identities)
+-- ==============================================================================
+-- 26. PROVISI AKUN-AKUN RESMI DEFAULT KE DALAM AUTH.USERS & PUBLIC.PROFILES
+-- ==============================================================================
+DO $$
+DECLARE
+    v_admin_id UUID := '00000000-0000-0000-0000-000000000001';
+    v_admin2_id UUID := '00000000-0000-0000-0000-000000000002';
+    v_guru_id UUID := '00000000-0000-0000-0000-000000000003';
+    v_siswa_id UUID := '00000000-0000-0000-0000-000000000004';
+BEGIN
+    -- 1. AKUN ADMIN UTAMA: karyono621@guru.smk.belajar.id (Password: AdminTKA2026!)
+    IF NOT EXISTS (SELECT 1 FROM auth.users WHERE LOWER(email) = 'karyono621@guru.smk.belajar.id') THEN
+        INSERT INTO auth.users (
+            id, instance_id, aud, role, email, encrypted_password,
+            email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
+            created_at, updated_at, confirmation_token, recovery_token, email_change_token_new, email_change
+        ) VALUES (
+            v_admin_id,
+            '00000000-0000-0000-0000-000000000000',
+            'authenticated',
+            'authenticated',
+            'karyono621@guru.smk.belajar.id',
+            crypt('AdminTKA2026!', gen_salt('bf')),
+            NOW(),
+            '{"provider":"email","providers":["email"]}'::jsonb,
+            '{"full_name":"Karyono (Administrator TKA)","role":"admin"}'::jsonb,
+            NOW(), NOW(), '', '', '', ''
+        );
+    ELSE
+        SELECT id INTO v_admin_id FROM auth.users WHERE LOWER(email) = 'karyono621@guru.smk.belajar.id';
+        UPDATE auth.users SET encrypted_password = crypt('AdminTKA2026!', gen_salt('bf')) WHERE id = v_admin_id;
+    END IF;
+
+    PERFORM public.ensure_auth_identity(v_admin_id, 'karyono621@guru.smk.belajar.id');
+
+    INSERT INTO public.profiles (id, email, full_name, role, status)
+    VALUES (v_admin_id, 'karyono621@guru.smk.belajar.id', 'Karyono (Administrator TKA)', 'admin', 'active')
+    ON CONFLICT (id) DO UPDATE SET role = 'admin', status = 'active', email = 'karyono621@guru.smk.belajar.id';
+
+    -- 2. AKUN ADMIN SEKOLAH: admin@smk.id (Password: AdminTKA2026!)
+    IF NOT EXISTS (SELECT 1 FROM auth.users WHERE LOWER(email) = 'admin@smk.id') THEN
+        INSERT INTO auth.users (
+            id, instance_id, aud, role, email, encrypted_password,
+            email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
+            created_at, updated_at, confirmation_token, recovery_token, email_change_token_new, email_change
+        ) VALUES (
+            v_admin2_id,
+            '00000000-0000-0000-0000-000000000000',
+            'authenticated',
+            'authenticated',
+            'admin@smk.id',
+            crypt('AdminTKA2026!', gen_salt('bf')),
+            NOW(),
+            '{"provider":"email","providers":["email"]}'::jsonb,
+            '{"full_name":"Administrator SMKN 1 Songgom","role":"admin"}'::jsonb,
+            NOW(), NOW(), '', '', '', ''
+        );
+    ELSE
+        SELECT id INTO v_admin2_id FROM auth.users WHERE LOWER(email) = 'admin@smk.id';
+        UPDATE auth.users SET encrypted_password = crypt('AdminTKA2026!', gen_salt('bf')) WHERE id = v_admin2_id;
+    END IF;
+
+    PERFORM public.ensure_auth_identity(v_admin2_id, 'admin@smk.id');
+
+    INSERT INTO public.profiles (id, email, full_name, role, status)
+    VALUES (v_admin2_id, 'admin@smk.id', 'Administrator SMKN 1 Songgom', 'admin', 'active')
+    ON CONFLICT (id) DO UPDATE SET role = 'admin', status = 'active', email = 'admin@smk.id';
+
+    -- 3. AKUN GURU RESMI: guru@smk.id (Password: GuruTKA2026!)
+    IF NOT EXISTS (SELECT 1 FROM auth.users WHERE LOWER(email) = 'guru@smk.id') THEN
+        INSERT INTO auth.users (
+            id, instance_id, aud, role, email, encrypted_password,
+            email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
+            created_at, updated_at, confirmation_token, recovery_token, email_change_token_new, email_change
+        ) VALUES (
+            v_guru_id,
+            '00000000-0000-0000-0000-000000000000',
+            'authenticated',
+            'authenticated',
+            'guru@smk.id',
+            crypt('GuruTKA2026!', gen_salt('bf')),
+            NOW(),
+            '{"provider":"email","providers":["email"]}'::jsonb,
+            '{"full_name":"Siti Aminah, S.Kom., Gr.","role":"guru"}'::jsonb,
+            NOW(), NOW(), '', '', '', ''
+        );
+    ELSE
+        SELECT id INTO v_guru_id FROM auth.users WHERE LOWER(email) = 'guru@smk.id';
+        UPDATE auth.users SET encrypted_password = crypt('GuruTKA2026!', gen_salt('bf')) WHERE id = v_guru_id;
+    END IF;
+
+    PERFORM public.ensure_auth_identity(v_guru_id, 'guru@smk.id');
+
+    INSERT INTO public.profiles (id, email, full_name, role, status, nip)
+    VALUES (v_guru_id, 'guru@smk.id', 'Siti Aminah, S.Kom., Gr.', 'guru', 'active', '198803152014022003')
+    ON CONFLICT (id) DO UPDATE SET role = 'guru', status = 'active', email = 'guru@smk.id', nip = '198803152014022003';
+
+    UPDATE public.teachers SET user_id = v_guru_id WHERE LOWER(email) = 'guru@smk.id';
+
+    -- 4. AKUN SISWA RESMI: siswa@smk.id (Password: SiswaTKA2026!)
+    IF NOT EXISTS (SELECT 1 FROM auth.users WHERE LOWER(email) = 'siswa@smk.id') THEN
+        INSERT INTO auth.users (
+            id, instance_id, aud, role, email, encrypted_password,
+            email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
+            created_at, updated_at, confirmation_token, recovery_token, email_change_token_new, email_change
+        ) VALUES (
+            v_siswa_id,
+            '00000000-0000-0000-0000-000000000000',
+            'authenticated',
+            'authenticated',
+            'siswa@smk.id',
+            crypt('SiswaTKA2026!', gen_salt('bf')),
+            NOW(),
+            '{"provider":"email","providers":["email"]}'::jsonb,
+            '{"full_name":"Budi Siswa Pratama","role":"siswa"}'::jsonb,
+            NOW(), NOW(), '', '', '', ''
+        );
+    ELSE
+        SELECT id INTO v_siswa_id FROM auth.users WHERE LOWER(email) = 'siswa@smk.id';
+        UPDATE auth.users SET encrypted_password = crypt('SiswaTKA2026!', gen_salt('bf')) WHERE id = v_siswa_id;
+    END IF;
+
+    PERFORM public.ensure_auth_identity(v_siswa_id, 'siswa@smk.id');
+
+    INSERT INTO public.profiles (id, email, full_name, role, status, nis, nisn, class_name, major_name)
+    VALUES (v_siswa_id, 'siswa@smk.id', 'Budi Siswa Pratama', 'siswa', 'active', '21001', '0051234567', 'XI TJKT 1', 'Teknik Jaringan Komputer dan Telekomunikasi')
+    ON CONFLICT (id) DO UPDATE SET role = 'siswa', status = 'active', email = 'siswa@smk.id', nis = '21001';
+
+    UPDATE public.students SET user_id = v_siswa_id WHERE LOWER(email) = 'siswa@smk.id';
+
+END $$;
+
+-- ==============================================================================
+-- 27. FUNGSI RPC: admin_create_user (PEMBUATAN PENGGUNA SATUAN)
+-- ==============================================================================
 CREATE OR REPLACE FUNCTION public.admin_create_user(
     p_email TEXT,
     p_password TEXT,
@@ -1108,7 +1111,7 @@ CREATE OR REPLACE FUNCTION public.admin_create_user(
     p_nip TEXT DEFAULT NULL,
     p_class_id UUID DEFAULT NULL,
     p_major_id UUID DEFAULT NULL,
-    p_subject_ids UUID[] DEFAULT '{}'
+    p_subject_ids UUID[] DEFAULT NULL
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -1117,103 +1120,76 @@ SET search_path = public, auth
 AS $$
 DECLARE
     v_user_id UUID;
-    v_major_id UUID := p_major_id;
-    v_class_name TEXT := NULL;
-    v_major_name TEXT := NULL;
-    v_existing_student_id UUID;
-    v_existing_teacher_id UUID;
-    v_has_provider_id BOOLEAN;
+    v_encrypted_pw TEXT;
+    v_class_name TEXT;
+    v_major_name TEXT;
+    v_subject_id UUID;
 BEGIN
-    IF p_email IS NULL OR trim(p_email) = '' THEN
-        RETURN jsonb_build_object('success', false, 'error', 'Email wajib diisi.');
+    p_email := LOWER(TRIM(p_email));
+    p_full_name := TRIM(p_full_name);
+    p_role := LOWER(TRIM(p_role));
+
+    IF p_email IS NULL OR p_email = '' OR p_password IS NULL OR p_password = '' THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Email dan password tidak boleh kosong');
     END IF;
 
-    IF p_password IS NULL OR length(trim(p_password)) < 6 THEN
-        RETURN jsonb_build_object('success', false, 'error', 'Kata sandi minimal 6 karakter.');
+    IF p_role NOT IN ('admin', 'guru', 'siswa') THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Role harus salah satu dari: admin, guru, siswa');
     END IF;
-
-    p_email := LOWER(trim(p_email));
-    p_full_name := trim(p_full_name);
-    p_role := LOWER(trim(p_role));
 
     IF p_class_id IS NOT NULL THEN
-        SELECT c.name, m.name, COALESCE(v_major_id, c.major_id)
-        INTO v_class_name, v_major_name, v_major_id
-        FROM public.classes c
-        LEFT JOIN public.majors m ON m.id = c.major_id
-        WHERE c.id = p_class_id;
+        SELECT name INTO v_class_name FROM public.classes WHERE id = p_class_id;
     END IF;
 
-    SELECT id INTO v_user_id FROM auth.users WHERE LOWER(email) = p_email LIMIT 1;
+    IF p_major_id IS NOT NULL THEN
+        SELECT name INTO v_major_name FROM public.majors WHERE id = p_major_id;
+    END IF;
 
-    IF v_user_id IS NULL THEN
+    v_encrypted_pw := crypt(p_password, gen_salt('bf'));
+
+    SELECT id INTO v_user_id FROM auth.users WHERE LOWER(email) = p_email;
+
+    IF v_user_id IS NOT NULL THEN
+        UPDATE auth.users
+        SET encrypted_password = v_encrypted_pw,
+            email_confirmed_at = COALESCE(email_confirmed_at, NOW()),
+            raw_app_meta_data = '{"provider":"email","providers":["email"]}'::jsonb,
+            raw_user_meta_data = jsonb_build_object(
+                'full_name', p_full_name,
+                'role', p_role,
+                'nis', p_nis,
+                'nip', p_nip
+            ),
+            updated_at = NOW()
+        WHERE id = v_user_id;
+    ELSE
         v_user_id := gen_random_uuid();
-        DELETE FROM public.profiles WHERE LOWER(email) = p_email;
-
         INSERT INTO auth.users (
             id, instance_id, aud, role, email, encrypted_password,
             email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
-            created_at, updated_at, confirmation_token, recovery_token, email_change_token_new, email_change
+            created_at, updated_at, confirmation_token, recovery_token,
+            email_change_token_new, email_change
         ) VALUES (
             v_user_id,
             '00000000-0000-0000-0000-000000000000',
             'authenticated',
             'authenticated',
             p_email,
-            crypt(p_password, gen_salt('bf')),
+            v_encrypted_pw,
             NOW(),
             '{"provider":"email","providers":["email"]}'::jsonb,
-            jsonb_build_object('full_name', p_full_name, 'role', p_role, 'nis', p_nis, 'nip', p_nip),
+            jsonb_build_object(
+                'full_name', p_full_name,
+                'role', p_role,
+                'nis', p_nis,
+                'nip', p_nip
+            ),
             NOW(), NOW(), '', '', '', ''
         );
-    ELSE
-        UPDATE auth.users 
-        SET encrypted_password = crypt(p_password, gen_salt('bf')),
-            email_confirmed_at = COALESCE(email_confirmed_at, NOW()),
-            raw_app_meta_data = '{"provider":"email","providers":["email"]}'::jsonb,
-            raw_user_meta_data = jsonb_build_object('full_name', p_full_name, 'role', p_role, 'nis', p_nis, 'nip', p_nip),
-            updated_at = NOW()
-        WHERE id = v_user_id;
     END IF;
 
-    -- WAJIB UNTUK LOGIN: SINKRONKAN KE auth.identities
-    BEGIN
-        SELECT EXISTS (
-            SELECT 1 FROM information_schema.columns 
-            WHERE table_schema = 'auth' AND table_name = 'identities' AND column_name = 'provider_id'
-        ) INTO v_has_provider_id;
+    PERFORM public.ensure_auth_identity(v_user_id, p_email);
 
-        DELETE FROM auth.identities WHERE user_id = v_user_id AND provider = 'email';
-
-        IF v_has_provider_id THEN
-            INSERT INTO auth.identities (
-                id, user_id, identity_data, provider, provider_id,
-                last_sign_in_at, created_at, updated_at
-            ) VALUES (
-                v_user_id::text,
-                v_user_id,
-                jsonb_build_object('sub', v_user_id::text, 'email', p_email, 'email_verified', true),
-                'email',
-                v_user_id::text,
-                NOW(), NOW(), NOW()
-            );
-        ELSE
-            INSERT INTO auth.identities (
-                id, user_id, identity_data, provider,
-                last_sign_in_at, created_at, updated_at
-            ) VALUES (
-                v_user_id::text,
-                v_user_id,
-                jsonb_build_object('sub', v_user_id::text, 'email', p_email, 'email_verified', true),
-                'email',
-                NOW(), NOW(), NOW()
-            );
-        END IF;
-    EXCEPTION WHEN OTHERS THEN
-        RAISE NOTICE 'Notice auth.identities: %', SQLERRM;
-    END;
-
-    -- UPSERT PROFILES
     DELETE FROM public.profiles WHERE LOWER(email) = p_email AND id <> v_user_id;
 
     INSERT INTO public.profiles (
@@ -1236,68 +1212,48 @@ BEGIN
         status = 'active',
         updated_at = NOW();
 
-    -- ENTRI TABEL SPESIFIK
     IF p_role = 'siswa' THEN
-        SELECT id INTO v_existing_student_id 
-        FROM public.students 
-        WHERE LOWER(email) = p_email OR (p_nis IS NOT NULL AND nis = p_nis)
-        LIMIT 1;
+        INSERT INTO public.students (
+            id, user_id, nis, nisn, full_name, email, phone_number, class_id, major_id, status
+        ) VALUES (
+            v_user_id, v_user_id, COALESCE(p_nis, ''), p_nisn, p_full_name, p_email, p_phone, p_class_id, p_major_id, 'active'
+        )
+        ON CONFLICT (email) DO UPDATE SET
+            user_id = v_user_id,
+            nis = COALESCE(EXCLUDED.nis, public.students.nis),
+            nisn = COALESCE(EXCLUDED.nisn, public.students.nisn),
+            full_name = EXCLUDED.full_name,
+            phone_number = COALESCE(EXCLUDED.phone_number, public.students.phone_number),
+            class_id = COALESCE(EXCLUDED.class_id, public.students.class_id),
+            major_id = COALESCE(EXCLUDED.major_id, public.students.major_id),
+            status = 'active';
 
-        IF v_existing_student_id IS NOT NULL THEN
-            UPDATE public.students SET
-                user_id = v_user_id,
-                full_name = p_full_name,
-                email = p_email,
-                phone_number = COALESCE(p_phone, phone_number),
-                nis = COALESCE(p_nis, nis),
-                nisn = COALESCE(p_nisn, nisn),
-                class_id = COALESCE(p_class_id, class_id),
-                major_id = COALESCE(v_major_id, major_id),
-                status = 'active',
-                updated_at = NOW()
-            WHERE id = v_existing_student_id;
-        ELSE
-            INSERT INTO public.students (
-                id, user_id, nis, nisn, full_name, email, phone_number, class_id, major_id, status, created_at, updated_at
-            ) VALUES (
-                v_user_id, v_user_id,
-                COALESCE(p_nis, 'S-' || substr(v_user_id::text, 1, 6)),
-                COALESCE(p_nisn, '00' || substr(v_user_id::text, 1, 8)),
-                p_full_name, p_email, p_phone, p_class_id, v_major_id, 'active', NOW(), NOW()
-            );
-        END IF;
+        UPDATE public.students SET user_id = v_user_id WHERE (nis = p_nis AND p_nis IS NOT NULL) OR LOWER(email) = p_email;
+    END IF;
 
-    ELSIF p_role = 'guru' THEN
-        SELECT id INTO v_existing_teacher_id
-        FROM public.teachers
-        WHERE LOWER(email) = p_email OR (p_nip IS NOT NULL AND nip = p_nip)
-        LIMIT 1;
+    IF p_role = 'guru' THEN
+        INSERT INTO public.teachers (
+            id, user_id, nip, full_name, email, phone_number, status
+        ) VALUES (
+            v_user_id, v_user_id, COALESCE(p_nip, ''), p_full_name, p_email, p_phone, 'active'
+        )
+        ON CONFLICT (email) DO UPDATE SET
+            user_id = v_user_id,
+            nip = COALESCE(EXCLUDED.nip, public.teachers.nip),
+            full_name = EXCLUDED.full_name,
+            phone_number = COALESCE(EXCLUDED.phone_number, public.teachers.phone_number),
+            status = 'active';
 
-        IF v_existing_teacher_id IS NOT NULL THEN
-            UPDATE public.teachers SET
-                user_id = v_user_id,
-                full_name = p_full_name,
-                email = p_email,
-                phone_number = COALESCE(p_phone, phone_number),
-                nip = COALESCE(p_nip, nip),
-                status = 'active',
-                updated_at = NOW()
-            WHERE id = v_existing_teacher_id;
-        ELSE
-            INSERT INTO public.teachers (
-                id, user_id, nip, full_name, email, phone_number, status, created_at, updated_at
-            ) VALUES (
-                v_user_id, v_user_id,
-                COALESCE(p_nip, 'G-' || substr(v_user_id::text, 1, 8)),
-                p_full_name, p_email, p_phone, 'active', NOW(), NOW()
-            );
-        END IF;
+        UPDATE public.teachers SET user_id = v_user_id WHERE (nip = p_nip AND p_nip IS NOT NULL) OR LOWER(email) = p_email;
 
         IF p_subject_ids IS NOT NULL AND array_length(p_subject_ids, 1) > 0 THEN
-            DELETE FROM public.teacher_subjects WHERE teacher_id = v_user_id OR teacher_id = v_existing_teacher_id;
-            INSERT INTO public.teacher_subjects (teacher_id, subject_id)
-            SELECT COALESCE(v_existing_teacher_id, v_user_id), unnest(p_subject_ids)
-            ON CONFLICT DO NOTHING;
+            FOREACH v_subject_id IN ARRAY p_subject_ids LOOP
+                INSERT INTO public.teacher_subjects (teacher_id, subject_id)
+                SELECT t.id, v_subject_id
+                FROM public.teachers t
+                WHERE t.user_id = v_user_id OR LOWER(t.email) = p_email
+                ON CONFLICT (teacher_id, subject_id) DO NOTHING;
+            END LOOP;
         END IF;
     END IF;
 
@@ -1306,18 +1262,97 @@ BEGIN
         'user_id', v_user_id,
         'email', p_email,
         'role', p_role,
-        'message', 'Akun berhasil dibuat dan langsung aktif.'
+        'message', 'Pengguna ' || p_email || ' berhasil dibuat dan terkonfirmasi.'
     );
 EXCEPTION WHEN OTHERS THEN
-    RETURN jsonb_build_object('success', false, 'error', SQLERRM);
+    RETURN jsonb_build_object(
+        'success', false,
+        'error', SQLERRM
+    );
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.admin_create_user TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.admin_create_user TO anon, authenticated, service_role, postgres;
 
--- C. FUNGSI ADMIN: RESET KATA SANDI SECARA LANGSUNG DENGAN SINKRONISASI IDENTITIES
+-- ==============================================================================
+-- 28. FUNGSI RPC: admin_batch_create_users (IMPOR MASAL DARI EXCEL)
+-- ==============================================================================
+CREATE OR REPLACE FUNCTION public.admin_batch_create_users(
+    p_users JSONB
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth
+AS $$
+DECLARE
+    v_item JSONB;
+    v_imported INT := 0;
+    v_failed INT := 0;
+    v_res JSONB;
+    v_role TEXT;
+    v_email TEXT;
+    v_password TEXT;
+    v_full_name TEXT;
+    v_phone TEXT;
+    v_nis TEXT;
+    v_nisn TEXT;
+    v_nip TEXT;
+    v_class_id UUID;
+    v_major_id UUID;
+BEGIN
+    FOR v_item IN SELECT * FROM jsonb_array_elements(p_users) LOOP
+        BEGIN
+            v_role := COALESCE(v_item->>'role', 'siswa');
+            v_email := v_item->>'email';
+            v_password := COALESCE(v_item->>'password', CASE WHEN v_role = 'guru' THEN 'Guru123!' WHEN v_role = 'admin' THEN 'Admin123!' ELSE 'Siswa123!' END);
+            v_full_name := COALESCE(v_item->>'full_name', 'Pengguna CBT');
+            v_phone := v_item->>'phone_number';
+            v_nis := v_item->>'nis';
+            v_nisn := v_item->>'nisn';
+            v_nip := v_item->>'nip';
+            v_class_id := (v_item->>'class_id')::uuid;
+            v_major_id := (v_item->>'major_id')::uuid;
+
+            v_res := public.admin_create_user(
+                p_email => v_email,
+                p_password => v_password,
+                p_full_name => v_full_name,
+                p_role => v_role,
+                p_phone => v_phone,
+                p_nis => v_nis,
+                p_nisn => v_nisn,
+                p_nip => v_nip,
+                p_class_id => v_class_id,
+                p_major_id => v_major_id
+            );
+
+            IF (v_res->>'success')::boolean THEN
+                v_imported := v_imported + 1;
+            ELSE
+                v_failed := v_failed + 1;
+            END IF;
+        EXCEPTION WHEN OTHERS THEN
+            v_failed := v_failed + 1;
+        END;
+    END LOOP;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'imported', v_imported,
+        'failed', v_failed,
+        'total', jsonb_array_length(p_users)
+    );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.admin_batch_create_users TO anon, authenticated, service_role, postgres;
+
+-- ==============================================================================
+-- 29. FUNGSI RPC: admin_reset_user_password (RESET KATA SANDI)
+-- ==============================================================================
 CREATE OR REPLACE FUNCTION public.admin_reset_user_password(
-    p_identifier TEXT,
+    p_email TEXT,
     p_new_password TEXT
 )
 RETURNS JSONB
@@ -1327,126 +1362,203 @@ SET search_path = public, auth
 AS $$
 DECLARE
     v_user_id UUID;
-    v_email TEXT;
-    v_has_provider_id BOOLEAN;
 BEGIN
-    IF p_new_password IS NULL OR length(trim(p_new_password)) < 6 THEN
-        RETURN jsonb_build_object('success', false, 'error', 'Kata sandi baru minimal 6 karakter.');
-    END IF;
+    p_email := LOWER(TRIM(p_email));
 
-    p_identifier := trim(p_identifier);
-
-    SELECT id, email INTO v_user_id, v_email FROM auth.users 
-    WHERE LOWER(email) = LOWER(p_identifier) OR id::text = p_identifier
-    LIMIT 1;
+    SELECT id INTO v_user_id FROM auth.users WHERE LOWER(email) = p_email;
 
     IF v_user_id IS NULL THEN
-        SELECT id, email INTO v_user_id, v_email FROM public.profiles 
-        WHERE nis = p_identifier OR nip = p_identifier
-        LIMIT 1;
+        RETURN jsonb_build_object('success', false, 'error', 'Pengguna dengan email ' || p_email || ' tidak ditemukan di sistem.');
     END IF;
 
-    IF v_user_id IS NULL THEN
-        SELECT user_id, email INTO v_user_id, v_email FROM public.students
-        WHERE nis = p_identifier OR nisn = p_identifier
-        LIMIT 1;
-    END IF;
-
-    IF v_user_id IS NULL THEN
-        SELECT user_id, email INTO v_user_id, v_email FROM public.teachers
-        WHERE nip = p_identifier
-        LIMIT 1;
-    END IF;
-
-    IF v_user_id IS NULL THEN
-        RETURN jsonb_build_object('success', false, 'error', 'Akun tidak ditemukan untuk: ' || p_identifier);
-    END IF;
-
-    UPDATE auth.users 
+    UPDATE auth.users
     SET encrypted_password = crypt(p_new_password, gen_salt('bf')),
         email_confirmed_at = COALESCE(email_confirmed_at, NOW()),
-        raw_app_meta_data = '{"provider":"email","providers":["email"]}'::jsonb,
         updated_at = NOW()
     WHERE id = v_user_id;
 
-    BEGIN
-        SELECT EXISTS (
-            SELECT 1 FROM information_schema.columns 
-            WHERE table_schema = 'auth' AND table_name = 'identities' AND column_name = 'provider_id'
-        ) INTO v_has_provider_id;
-
-        DELETE FROM auth.identities WHERE user_id = v_user_id AND provider = 'email';
-
-        IF v_has_provider_id THEN
-            INSERT INTO auth.identities (
-                id, user_id, identity_data, provider, provider_id,
-                last_sign_in_at, created_at, updated_at
-            ) VALUES (
-                v_user_id::text, v_user_id,
-                jsonb_build_object('sub', v_user_id::text, 'email', LOWER(v_email), 'email_verified', true),
-                'email', v_user_id::text,
-                NOW(), NOW(), NOW()
-            );
-        ELSE
-            INSERT INTO auth.identities (
-                id, user_id, identity_data, provider,
-                last_sign_in_at, created_at, updated_at
-            ) VALUES (
-                v_user_id::text, v_user_id,
-                jsonb_build_object('sub', v_user_id::text, 'email', LOWER(v_email), 'email_verified', true),
-                'email',
-                NOW(), NOW(), NOW()
-            );
-        END IF;
-    EXCEPTION WHEN OTHERS THEN
-        RAISE NOTICE 'Notice identities reset: %', SQLERRM;
-    END;
+    PERFORM public.ensure_auth_identity(v_user_id, p_email);
 
     RETURN jsonb_build_object(
         'success', true,
         'user_id', v_user_id,
-        'email', v_email,
-        'message', 'Kata sandi berhasil diperbarui.'
+        'email', p_email,
+        'message', 'Password untuk ' || p_email || ' berhasil diperbarui.'
     );
 EXCEPTION WHEN OTHERS THEN
     RETURN jsonb_build_object('success', false, 'error', SQLERRM);
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.admin_reset_user_password TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.admin_reset_user_password TO anon, authenticated, service_role, postgres;
 
--- D. AUTO-REPAIR SINKRONISASI SEMUA AKUN YANG ADA KE auth.identities
+-- ==============================================================================
+-- 30. FUNGSI RPC: sync_unregistered_logins (SINKRONISASI AKUN LAMA OTOMATIS)
+-- ==============================================================================
+CREATE OR REPLACE FUNCTION public.sync_unregistered_logins(
+    p_default_student_pass TEXT DEFAULT 'Siswa123!',
+    p_default_teacher_pass TEXT DEFAULT 'Guru123!',
+    p_default_admin_pass TEXT DEFAULT 'Admin123!'
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth
+AS $$
+DECLARE
+    v_new_user_id UUID;
+    v_students_synced INT := 0;
+    v_teachers_synced INT := 0;
+    v_profiles_synced INT := 0;
+    v_total_fixed INT := 0;
+    s RECORD;
+    t RECORD;
+    p RECORD;
+BEGIN
+    -- 1. SINKRONKAN SEMUA SISWA
+    FOR s IN 
+        SELECT s.id, s.email, s.full_name, s.nis, s.nisn, s.class_id, s.major_id, s.phone_number
+        FROM public.students s
+        WHERE s.email IS NOT NULL AND trim(s.email) <> ''
+          AND NOT EXISTS (
+              SELECT 1 FROM auth.users u WHERE LOWER(u.email) = LOWER(trim(s.email))
+          )
+    LOOP
+        v_new_user_id := gen_random_uuid();
+        
+        INSERT INTO auth.users (
+            id, instance_id, aud, role, email, encrypted_password,
+            email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
+            created_at, updated_at, confirmation_token, recovery_token, email_change_token_new, email_change
+        ) VALUES (
+            v_new_user_id,
+            '00000000-0000-0000-0000-000000000000',
+            'authenticated',
+            'authenticated',
+            LOWER(trim(s.email)),
+            crypt(p_default_student_pass, gen_salt('bf')),
+            NOW(),
+            '{"provider":"email","providers":["email"]}'::jsonb,
+            jsonb_build_object('full_name', s.full_name, 'role', 'siswa', 'nis', s.nis),
+            NOW(), NOW(), '', '', '', ''
+        );
+
+        PERFORM public.ensure_auth_identity(v_new_user_id, s.email);
+
+        UPDATE public.students SET user_id = v_new_user_id WHERE id = s.id;
+
+        INSERT INTO public.profiles (
+            id, email, full_name, role, nis, nisn, phone_number, status, updated_at
+        ) VALUES (
+            v_new_user_id, LOWER(trim(s.email)), s.full_name, 'siswa', s.nis, s.nisn, s.phone_number, 'active', NOW()
+        )
+        ON CONFLICT (id) DO UPDATE SET
+            email = EXCLUDED.email,
+            full_name = EXCLUDED.full_name,
+            role = 'siswa',
+            nis = EXCLUDED.nis,
+            nisn = EXCLUDED.nisn,
+            status = 'active';
+
+        v_students_synced := v_students_synced + 1;
+    END LOOP;
+
+    -- 2. SINKRONKAN SEMUA GURU
+    FOR t IN 
+        SELECT t.id, t.email, t.full_name, t.nip, t.phone_number
+        FROM public.teachers t
+        WHERE t.email IS NOT NULL AND trim(t.email) <> ''
+          AND NOT EXISTS (
+              SELECT 1 FROM auth.users u WHERE LOWER(u.email) = LOWER(trim(t.email))
+          )
+    LOOP
+        v_new_user_id := gen_random_uuid();
+        
+        INSERT INTO auth.users (
+            id, instance_id, aud, role, email, encrypted_password,
+            email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
+            created_at, updated_at, confirmation_token, recovery_token, email_change_token_new, email_change
+        ) VALUES (
+            v_new_user_id,
+            '00000000-0000-0000-0000-000000000000',
+            'authenticated',
+            'authenticated',
+            LOWER(trim(t.email)),
+            crypt(p_default_teacher_pass, gen_salt('bf')),
+            NOW(),
+            '{"provider":"email","providers":["email"]}'::jsonb,
+            jsonb_build_object('full_name', t.full_name, 'role', 'guru', 'nip', t.nip),
+            NOW(), NOW(), '', '', '', ''
+        );
+
+        PERFORM public.ensure_auth_identity(v_new_user_id, t.email);
+
+        UPDATE public.teachers SET user_id = v_new_user_id WHERE id = t.id;
+
+        INSERT INTO public.profiles (
+            id, email, full_name, role, nip, phone_number, status, updated_at
+        ) VALUES (
+            v_new_user_id, LOWER(trim(t.email)), t.full_name, 'guru', t.nip, t.phone_number, 'active', NOW()
+        )
+        ON CONFLICT (id) DO UPDATE SET
+            email = EXCLUDED.email,
+            full_name = EXCLUDED.full_name,
+            role = 'guru',
+            nip = EXCLUDED.nip,
+            status = 'active';
+
+        v_teachers_synced := v_teachers_synced + 1;
+    END LOOP;
+
+    -- 3. PERBAIKI SEMUA USER YANG SUDAH TERDAFTAR DI auth.users
+    FOR p IN SELECT id, email FROM auth.users WHERE email IS NOT NULL LOOP
+        PERFORM public.ensure_auth_identity(p.id, p.email);
+        v_profiles_synced := v_profiles_synced + 1;
+    END LOOP;
+
+    v_total_fixed := v_students_synced + v_teachers_synced + v_profiles_synced;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'students_synced', v_students_synced,
+        'teachers_synced', v_teachers_synced,
+        'profiles_synced', v_profiles_synced,
+        'total_fixed', v_total_fixed,
+        'message', 'Sinkronisasi berhasil! ' || v_total_fixed || ' akun telah terkonfirmasi dan siap login.'
+    );
+EXCEPTION WHEN OTHERS THEN
+    RETURN jsonb_build_object(
+        'success', false,
+        'error', SQLERRM
+    );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.sync_unregistered_logins TO anon, authenticated, service_role, postgres;
+
+-- ==============================================================================
+-- 31. AUTO-REPAIR & SINKRONISASI TERAKHIR (IDEMPOTENT PASS)
+-- ==============================================================================
 DO $$
 DECLARE
     u RECORD;
-    v_has_provider_id BOOLEAN;
 BEGIN
-    SELECT EXISTS (
-        SELECT 1 FROM information_schema.columns 
-        WHERE table_schema = 'auth' AND table_name = 'identities' AND column_name = 'provider_id'
-    ) INTO v_has_provider_id;
-
     FOR u IN SELECT id, email FROM auth.users WHERE email IS NOT NULL LOOP
-        UPDATE auth.users 
-        SET email_confirmed_at = COALESCE(email_confirmed_at, NOW()),
-            raw_app_meta_data = '{"provider":"email","providers":["email"]}'::jsonb
-        WHERE id = u.id;
-
-        DELETE FROM auth.identities WHERE user_id = u.id AND provider = 'email';
-
-        IF v_has_provider_id THEN
-            INSERT INTO auth.identities (id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at)
-            VALUES (u.id::text, u.id, jsonb_build_object('sub', u.id::text, 'email', LOWER(u.email), 'email_verified', true), 'email', u.id::text, NOW(), NOW(), NOW());
-        ELSE
-            INSERT INTO auth.identities (id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at)
-            VALUES (u.id::text, u.id, jsonb_build_object('sub', u.id::text, 'email', LOWER(u.email), 'email_verified', true), 'email', NOW(), NOW(), NOW());
-        END IF;
+        PERFORM public.ensure_auth_identity(u.id, u.email);
 
         UPDATE public.students SET user_id = u.id WHERE LOWER(email) = LOWER(u.email) AND (user_id IS NULL OR user_id <> u.id);
         UPDATE public.teachers SET user_id = u.id WHERE LOWER(email) = LOWER(u.email) AND (user_id IS NULL OR user_id <> u.id);
+
+        UPDATE public.profiles p
+        SET nis = s.nis, nisn = s.nisn
+        FROM public.students s
+        WHERE p.id = u.id AND LOWER(s.email) = LOWER(u.email) AND p.nis IS NULL;
+
+        UPDATE public.profiles p
+        SET nip = t.nip
+        FROM public.teachers t
+        WHERE p.id = u.id AND LOWER(t.email) = LOWER(u.email) AND p.nip IS NULL;
     END LOOP;
 END $$;
 
--- Selesai!
-SELECT 'SKRIP DATABASE TKA SMKN 1 SONGGOM DAN AKUN PENGGUNA RESMI BERHASIL DIBUAT 100% SUKSES!' AS status;
-
+SELECT 'DATABASE & OTENTIKASI CBT TKA SMKN 1 SONGGOM 100% SUKSES DISIAPKAN!' AS status;
