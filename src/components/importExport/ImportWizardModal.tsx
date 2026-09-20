@@ -208,6 +208,9 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
       } else if (entityType === 'guru') {
         const res = await masterData.importTeachersBatch(domainEntities);
         importedCount = res.imported;
+      } else if (entityType === 'admin') {
+        const res = await masterData.importAdminsBatch(domainEntities);
+        importedCount = res.imported;
       } else if (entityType === 'mapel') {
         const res = await masterData.importSubjectsBatch(domainEntities);
         importedCount = res.imported;
@@ -255,6 +258,8 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
         return 'Siswa';
       case 'guru':
         return 'Guru / Pendidik';
+      case 'admin':
+        return 'Admin / Operator';
       case 'mapel':
         return 'Mata Pelajaran';
       case 'kelas':
@@ -353,11 +358,12 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
                   1. Pilih Modul / Entitas Master Data yang Akan Diimpor:
                 </label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2">
                   {(
                     [
                       { key: 'siswa', label: 'Siswa' },
                       { key: 'guru', label: 'Guru' },
+                      { key: 'admin', label: 'Admin' },
                       { key: 'mapel', label: 'Mapel' },
                       { key: 'kelas', label: 'Kelas' },
                       { key: 'jurusan', label: 'Jurusan' },
@@ -781,6 +787,19 @@ export const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
                     <div className="text-3xl font-black text-rose-700">{summary.failedCount}</div>
                   </div>
                 </div>
+
+                {/* Login Credentials Notice */}
+                {(entityType === 'siswa' || entityType === 'guru' || entityType === 'admin') && summary.successCount > 0 && (
+                  <div className="mt-3 p-3 bg-white/80 rounded-xl border border-emerald-200 text-left">
+                    <div className="flex items-center gap-2 text-xs font-bold text-emerald-900 mb-1">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      Status Kredensial Login Supabase Auth:
+                    </div>
+                    <p className="text-xs text-emerald-800 leading-relaxed">
+                      Akun login telah dibuat dan terkonfirmasi secara instan. Pengguna dapat langsung login ke aplikasi menggunakan <strong>Email</strong> ataupun <strong>{entityType === 'siswa' ? 'NIS' : 'NIP / ID'}</strong> dengan kata sandi yang tertera pada Excel (atau default: <em>{entityType === 'siswa' ? 'Siswa123!' : entityType === 'guru' ? 'Guru123!' : 'Admin123!'}</em>).
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Action if there are failed rows */}

@@ -1040,11 +1040,63 @@ BEGIN
 
     UPDATE public.students SET user_id = v_siswa_id WHERE email = 'siswa@smk.id';
 
+    -- SINKRONKAN IDENTITAS EMAIL KE auth.identities UNTUK SEMUA AKUN BAWAAN
+    DELETE FROM auth.identities WHERE provider = 'email' AND user_id IN (v_admin_id, v_admin2_id, v_guru_id, v_siswa_id);
+    
+    INSERT INTO auth.identities (id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at)
+    VALUES 
+        (v_admin_id::text, v_admin_id, jsonb_build_object('sub', v_admin_id::text, 'email', 'karyono621@guru.smk.belajar.id', 'email_verified', true), 'email', v_admin_id::text, NOW(), NOW(), NOW()),
+        (v_admin2_id::text, v_admin2_id, jsonb_build_object('sub', v_admin2_id::text, 'email', 'admin@smk.id', 'email_verified', true), 'email', v_admin2_id::text, NOW(), NOW(), NOW()),
+        (v_guru_id::text, v_guru_id, jsonb_build_object('sub', v_guru_id::text, 'email', 'guru@smk.id', 'email_verified', true), 'email', v_guru_id::text, NOW(), NOW(), NOW()),
+        (v_siswa_id::text, v_siswa_id, jsonb_build_object('sub', v_siswa_id::text, 'email', 'siswa@smk.id', 'email_verified', true), 'email', v_siswa_id::text, NOW(), NOW(), NOW())
+    ON CONFLICT DO NOTHING;
+
 END $$;
 
 -- ==============================================================================
--- 24. FUNGSI ADMIN: BUAT DAN RESET USER SECARA LANGSUNG
+-- 24. FUNGSI RESOLUSI IDENTIFIER & ADMIN USER MANAGEMENT LENGKAP
 -- ==============================================================================
+
+-- A. FUNGSI RESOLUSI NIS/NIP KE EMAIL (SECURITY DEFINER - DAPAT DIAKSES SAAT LOGIN SEBELUM AUTENTIKASI)
+CREATE OR REPLACE FUNCTION public.get_email_by_identifier(p_identifier TEXT)
+RETURNS TEXT
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_clean_id TEXT;
+    v_email TEXT;
+BEGIN
+    IF p_identifier IS NULL OR trim(p_identifier) = '' THEN
+        RETURN NULL;
+    END IF;
+
+    v_clean_id := trim(p_identifier);
+
+    IF v_clean_id LIKE '%@%' THEN
+        RETURN LOWER(v_clean_id);
+    END IF;
+
+    SELECT email INTO v_email FROM public.profiles WHERE nis = v_clean_id OR LOWER(email) = LOWER(v_clean_id) LIMIT 1;
+    IF v_email IS NOT NULL THEN RETURN LOWER(v_email); END IF;
+
+    SELECT email INTO v_email FROM public.profiles WHERE nip = v_clean_id LIMIT 1;
+    IF v_email IS NOT NULL THEN RETURN LOWER(v_email); END IF;
+
+    SELECT email INTO v_email FROM public.students WHERE nis = v_clean_id OR nisn = v_clean_id LIMIT 1;
+    IF v_email IS NOT NULL THEN RETURN LOWER(v_email); END IF;
+
+    SELECT email INTO v_email FROM public.teachers WHERE nip = v_clean_id LIMIT 1;
+    IF v_email IS NOT NULL THEN RETURN LOWER(v_email); END IF;
+
+    RETURN NULL;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.get_email_by_identifier(TEXT) TO anon, authenticated, service_role;
+
+-- B. FUNGSI ADMIN: BUAT ATAU PERBARUI AKUN SISWA / GURU (DENGAN SINKRONISASI auth.identities)
 CREATE OR REPLACE FUNCTION public.admin_create_user(
     p_email TEXT,
     p_password TEXT,
@@ -1061,33 +1113,43 @@ CREATE OR REPLACE FUNCTION public.admin_create_user(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public, auth
 AS $$
 DECLARE
     v_user_id UUID;
     v_major_id UUID := p_major_id;
     v_class_name TEXT := NULL;
     v_major_name TEXT := NULL;
+    v_existing_student_id UUID;
+    v_existing_teacher_id UUID;
+    v_has_provider_id BOOLEAN;
 BEGIN
-    IF p_email IS NULL OR p_email = '' THEN
-        RETURN jsonb_build_object('success', false, 'error', 'Email tidak boleh kosong');
+    IF p_email IS NULL OR trim(p_email) = '' THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Email wajib diisi.');
     END IF;
 
-    IF p_password IS NULL OR length(p_password) < 6 THEN
-        RETURN jsonb_build_object('success', false, 'error', 'Kata sandi minimal 6 karakter');
+    IF p_password IS NULL OR length(trim(p_password)) < 6 THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Kata sandi minimal 6 karakter.');
     END IF;
+
+    p_email := LOWER(trim(p_email));
+    p_full_name := trim(p_full_name);
+    p_role := LOWER(trim(p_role));
 
     IF p_class_id IS NOT NULL THEN
-        SELECT c.name, m.name, c.major_id 
+        SELECT c.name, m.name, COALESCE(v_major_id, c.major_id)
         INTO v_class_name, v_major_name, v_major_id
         FROM public.classes c
         LEFT JOIN public.majors m ON m.id = c.major_id
         WHERE c.id = p_class_id;
     END IF;
 
-    SELECT id INTO v_user_id FROM auth.users WHERE LOWER(email) = LOWER(p_email);
+    SELECT id INTO v_user_id FROM auth.users WHERE LOWER(email) = p_email LIMIT 1;
 
     IF v_user_id IS NULL THEN
         v_user_id := gen_random_uuid();
+        DELETE FROM public.profiles WHERE LOWER(email) = p_email;
+
         INSERT INTO auth.users (
             id, instance_id, aud, role, email, encrypted_password,
             email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
@@ -1097,7 +1159,7 @@ BEGIN
             '00000000-0000-0000-0000-000000000000',
             'authenticated',
             'authenticated',
-            LOWER(p_email),
+            p_email,
             crypt(p_password, gen_salt('bf')),
             NOW(),
             '{"provider":"email","providers":["email"]}'::jsonb,
@@ -1108,16 +1170,57 @@ BEGIN
         UPDATE auth.users 
         SET encrypted_password = crypt(p_password, gen_salt('bf')),
             email_confirmed_at = COALESCE(email_confirmed_at, NOW()),
+            raw_app_meta_data = '{"provider":"email","providers":["email"]}'::jsonb,
             raw_user_meta_data = jsonb_build_object('full_name', p_full_name, 'role', p_role, 'nis', p_nis, 'nip', p_nip),
             updated_at = NOW()
         WHERE id = v_user_id;
     END IF;
 
+    -- WAJIB UNTUK LOGIN: SINKRONKAN KE auth.identities
+    BEGIN
+        SELECT EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_schema = 'auth' AND table_name = 'identities' AND column_name = 'provider_id'
+        ) INTO v_has_provider_id;
+
+        DELETE FROM auth.identities WHERE user_id = v_user_id AND provider = 'email';
+
+        IF v_has_provider_id THEN
+            INSERT INTO auth.identities (
+                id, user_id, identity_data, provider, provider_id,
+                last_sign_in_at, created_at, updated_at
+            ) VALUES (
+                v_user_id::text,
+                v_user_id,
+                jsonb_build_object('sub', v_user_id::text, 'email', p_email, 'email_verified', true),
+                'email',
+                v_user_id::text,
+                NOW(), NOW(), NOW()
+            );
+        ELSE
+            INSERT INTO auth.identities (
+                id, user_id, identity_data, provider,
+                last_sign_in_at, created_at, updated_at
+            ) VALUES (
+                v_user_id::text,
+                v_user_id,
+                jsonb_build_object('sub', v_user_id::text, 'email', p_email, 'email_verified', true),
+                'email',
+                NOW(), NOW(), NOW()
+            );
+        END IF;
+    EXCEPTION WHEN OTHERS THEN
+        RAISE NOTICE 'Notice auth.identities: %', SQLERRM;
+    END;
+
+    -- UPSERT PROFILES
+    DELETE FROM public.profiles WHERE LOWER(email) = p_email AND id <> v_user_id;
+
     INSERT INTO public.profiles (
         id, email, full_name, role, phone_number,
         nis, nisn, nip, class_name, major_name, status, updated_at
     ) VALUES (
-        v_user_id, LOWER(p_email), p_full_name, p_role, p_phone,
+        v_user_id, p_email, p_full_name, p_role, p_phone,
         p_nis, p_nisn, p_nip, v_class_name, v_major_name, 'active', NOW()
     )
     ON CONFLICT (id) DO UPDATE SET
@@ -1133,43 +1236,67 @@ BEGIN
         status = 'active',
         updated_at = NOW();
 
+    -- ENTRI TABEL SPESIFIK
     IF p_role = 'siswa' THEN
-        INSERT INTO public.students (
-            id, user_id, nis, nisn, full_name, email, phone_number, class_id, major_id, status
-        ) VALUES (
-            v_user_id, v_user_id, COALESCE(p_nis, 'S-' || substr(v_user_id::text, 1, 6)),
-            COALESCE(p_nisn, '00' || substr(v_user_id::text, 1, 8)),
-            p_full_name, LOWER(p_email), p_phone, p_class_id, v_major_id, 'active'
-        )
-        ON CONFLICT (id) DO UPDATE SET
-            user_id = v_user_id,
-            full_name = EXCLUDED.full_name,
-            email = EXCLUDED.email,
-            class_id = COALESCE(EXCLUDED.class_id, public.students.class_id),
-            major_id = COALESCE(EXCLUDED.major_id, public.students.major_id),
-            phone_number = COALESCE(EXCLUDED.phone_number, public.students.phone_number),
-            status = 'active';
+        SELECT id INTO v_existing_student_id 
+        FROM public.students 
+        WHERE LOWER(email) = p_email OR (p_nis IS NOT NULL AND nis = p_nis)
+        LIMIT 1;
 
-        UPDATE public.students SET user_id = v_user_id WHERE LOWER(email) = LOWER(p_email) AND id <> v_user_id;
+        IF v_existing_student_id IS NOT NULL THEN
+            UPDATE public.students SET
+                user_id = v_user_id,
+                full_name = p_full_name,
+                email = p_email,
+                phone_number = COALESCE(p_phone, phone_number),
+                nis = COALESCE(p_nis, nis),
+                nisn = COALESCE(p_nisn, nisn),
+                class_id = COALESCE(p_class_id, class_id),
+                major_id = COALESCE(v_major_id, major_id),
+                status = 'active',
+                updated_at = NOW()
+            WHERE id = v_existing_student_id;
+        ELSE
+            INSERT INTO public.students (
+                id, user_id, nis, nisn, full_name, email, phone_number, class_id, major_id, status, created_at, updated_at
+            ) VALUES (
+                v_user_id, v_user_id,
+                COALESCE(p_nis, 'S-' || substr(v_user_id::text, 1, 6)),
+                COALESCE(p_nisn, '00' || substr(v_user_id::text, 1, 8)),
+                p_full_name, p_email, p_phone, p_class_id, v_major_id, 'active', NOW(), NOW()
+            );
+        END IF;
 
     ELSIF p_role = 'guru' THEN
-        INSERT INTO public.teachers (
-            id, user_id, nip, full_name, email, phone_number, status
-        ) VALUES (
-            v_user_id, v_user_id, COALESCE(p_nip, 'G-' || substr(v_user_id::text, 1, 8)),
-            p_full_name, LOWER(p_email), p_phone, 'active'
-        )
-        ON CONFLICT (id) DO UPDATE SET
-            user_id = v_user_id,
-            full_name = EXCLUDED.full_name,
-            email = EXCLUDED.email,
-            phone_number = COALESCE(EXCLUDED.phone_number, public.teachers.phone_number),
-            status = 'active';
+        SELECT id INTO v_existing_teacher_id
+        FROM public.teachers
+        WHERE LOWER(email) = p_email OR (p_nip IS NOT NULL AND nip = p_nip)
+        LIMIT 1;
+
+        IF v_existing_teacher_id IS NOT NULL THEN
+            UPDATE public.teachers SET
+                user_id = v_user_id,
+                full_name = p_full_name,
+                email = p_email,
+                phone_number = COALESCE(p_phone, phone_number),
+                nip = COALESCE(p_nip, nip),
+                status = 'active',
+                updated_at = NOW()
+            WHERE id = v_existing_teacher_id;
+        ELSE
+            INSERT INTO public.teachers (
+                id, user_id, nip, full_name, email, phone_number, status, created_at, updated_at
+            ) VALUES (
+                v_user_id, v_user_id,
+                COALESCE(p_nip, 'G-' || substr(v_user_id::text, 1, 8)),
+                p_full_name, p_email, p_phone, 'active', NOW(), NOW()
+            );
+        END IF;
 
         IF p_subject_ids IS NOT NULL AND array_length(p_subject_ids, 1) > 0 THEN
-            DELETE FROM public.teacher_subjects WHERE teacher_id = v_user_id;
+            DELETE FROM public.teacher_subjects WHERE teacher_id = v_user_id OR teacher_id = v_existing_teacher_id;
             INSERT INTO public.teacher_subjects (teacher_id, subject_id)
-            SELECT v_user_id, unnest(p_subject_ids)
+            SELECT COALESCE(v_existing_teacher_id, v_user_id), unnest(p_subject_ids)
             ON CONFLICT DO NOTHING;
         END IF;
     END IF;
@@ -1177,14 +1304,18 @@ BEGIN
     RETURN jsonb_build_object(
         'success', true,
         'user_id', v_user_id,
-        'email', LOWER(p_email),
-        'role', p_role
+        'email', p_email,
+        'role', p_role,
+        'message', 'Akun berhasil dibuat dan langsung aktif.'
     );
 EXCEPTION WHEN OTHERS THEN
     RETURN jsonb_build_object('success', false, 'error', SQLERRM);
 END;
 $$;
 
+GRANT EXECUTE ON FUNCTION public.admin_create_user TO anon, authenticated, service_role;
+
+-- C. FUNGSI ADMIN: RESET KATA SANDI SECARA LANGSUNG DENGAN SINKRONISASI IDENTITIES
 CREATE OR REPLACE FUNCTION public.admin_reset_user_password(
     p_identifier TEXT,
     p_new_password TEXT
@@ -1192,14 +1323,18 @@ CREATE OR REPLACE FUNCTION public.admin_reset_user_password(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public, auth
 AS $$
 DECLARE
     v_user_id UUID;
     v_email TEXT;
+    v_has_provider_id BOOLEAN;
 BEGIN
-    IF p_new_password IS NULL OR length(p_new_password) < 6 THEN
-        RETURN jsonb_build_object('success', false, 'error', 'Kata sandi baru minimal 6 karakter');
+    IF p_new_password IS NULL OR length(trim(p_new_password)) < 6 THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Kata sandi baru minimal 6 karakter.');
     END IF;
+
+    p_identifier := trim(p_identifier);
 
     SELECT id, email INTO v_user_id, v_email FROM auth.users 
     WHERE LOWER(email) = LOWER(p_identifier) OR id::text = p_identifier
@@ -1212,28 +1347,106 @@ BEGIN
     END IF;
 
     IF v_user_id IS NULL THEN
+        SELECT user_id, email INTO v_user_id, v_email FROM public.students
+        WHERE nis = p_identifier OR nisn = p_identifier
+        LIMIT 1;
+    END IF;
+
+    IF v_user_id IS NULL THEN
+        SELECT user_id, email INTO v_user_id, v_email FROM public.teachers
+        WHERE nip = p_identifier
+        LIMIT 1;
+    END IF;
+
+    IF v_user_id IS NULL THEN
         RETURN jsonb_build_object('success', false, 'error', 'Akun tidak ditemukan untuk: ' || p_identifier);
     END IF;
 
     UPDATE auth.users 
     SET encrypted_password = crypt(p_new_password, gen_salt('bf')),
         email_confirmed_at = COALESCE(email_confirmed_at, NOW()),
+        raw_app_meta_data = '{"provider":"email","providers":["email"]}'::jsonb,
         updated_at = NOW()
     WHERE id = v_user_id;
+
+    BEGIN
+        SELECT EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_schema = 'auth' AND table_name = 'identities' AND column_name = 'provider_id'
+        ) INTO v_has_provider_id;
+
+        DELETE FROM auth.identities WHERE user_id = v_user_id AND provider = 'email';
+
+        IF v_has_provider_id THEN
+            INSERT INTO auth.identities (
+                id, user_id, identity_data, provider, provider_id,
+                last_sign_in_at, created_at, updated_at
+            ) VALUES (
+                v_user_id::text, v_user_id,
+                jsonb_build_object('sub', v_user_id::text, 'email', LOWER(v_email), 'email_verified', true),
+                'email', v_user_id::text,
+                NOW(), NOW(), NOW()
+            );
+        ELSE
+            INSERT INTO auth.identities (
+                id, user_id, identity_data, provider,
+                last_sign_in_at, created_at, updated_at
+            ) VALUES (
+                v_user_id::text, v_user_id,
+                jsonb_build_object('sub', v_user_id::text, 'email', LOWER(v_email), 'email_verified', true),
+                'email',
+                NOW(), NOW(), NOW()
+            );
+        END IF;
+    EXCEPTION WHEN OTHERS THEN
+        RAISE NOTICE 'Notice identities reset: %', SQLERRM;
+    END;
 
     RETURN jsonb_build_object(
         'success', true,
         'user_id', v_user_id,
         'email', v_email,
-        'message', 'Kata sandi berhasil diperbarui'
+        'message', 'Kata sandi berhasil diperbarui.'
     );
 EXCEPTION WHEN OTHERS THEN
     RETURN jsonb_build_object('success', false, 'error', SQLERRM);
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.admin_create_user TO anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.admin_reset_user_password TO anon, authenticated, service_role;
+
+-- D. AUTO-REPAIR SINKRONISASI SEMUA AKUN YANG ADA KE auth.identities
+DO $$
+DECLARE
+    u RECORD;
+    v_has_provider_id BOOLEAN;
+BEGIN
+    SELECT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'auth' AND table_name = 'identities' AND column_name = 'provider_id'
+    ) INTO v_has_provider_id;
+
+    FOR u IN SELECT id, email FROM auth.users WHERE email IS NOT NULL LOOP
+        UPDATE auth.users 
+        SET email_confirmed_at = COALESCE(email_confirmed_at, NOW()),
+            raw_app_meta_data = '{"provider":"email","providers":["email"]}'::jsonb
+        WHERE id = u.id;
+
+        DELETE FROM auth.identities WHERE user_id = u.id AND provider = 'email';
+
+        IF v_has_provider_id THEN
+            INSERT INTO auth.identities (id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at)
+            VALUES (u.id::text, u.id, jsonb_build_object('sub', u.id::text, 'email', LOWER(u.email), 'email_verified', true), 'email', u.id::text, NOW(), NOW(), NOW());
+        ELSE
+            INSERT INTO auth.identities (id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at)
+            VALUES (u.id::text, u.id, jsonb_build_object('sub', u.id::text, 'email', LOWER(u.email), 'email_verified', true), 'email', NOW(), NOW(), NOW());
+        END IF;
+
+        UPDATE public.students SET user_id = u.id WHERE LOWER(email) = LOWER(u.email) AND (user_id IS NULL OR user_id <> u.id);
+        UPDATE public.teachers SET user_id = u.id WHERE LOWER(email) = LOWER(u.email) AND (user_id IS NULL OR user_id <> u.id);
+    END LOOP;
+END $$;
 
 -- Selesai!
 SELECT 'SKRIP DATABASE TKA SMKN 1 SONGGOM DAN AKUN PENGGUNA RESMI BERHASIL DIBUAT 100% SUKSES!' AS status;
+

@@ -134,38 +134,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Jika input bukan email (misalnya NIS siswa atau NIP guru), cari alamat email terdaftarnya
       if (!targetEmail.includes('@')) {
         try {
-          // Cari di tabel profiles
-          const { data: profileMatch } = await supabase
-            .from('profiles')
-            .select('email')
-            .or(`nis.eq.${targetEmail},nip.eq.${targetEmail}`)
-            .limit(1)
-            .maybeSingle();
+          // 1. Panggil RPC get_email_by_identifier (SECURITY DEFINER, bebas hambatan RLS anon)
+          const { data: resolvedEmail, error: rpcErr } = await supabase.rpc('get_email_by_identifier', {
+            p_identifier: targetEmail.trim(),
+          });
 
-          if (profileMatch?.email) {
-            targetEmail = profileMatch.email;
+          if (resolvedEmail && typeof resolvedEmail === 'string' && resolvedEmail.includes('@')) {
+            targetEmail = resolvedEmail.trim();
           } else {
-            // Cari di tabel students jika belum ada di profiles
-            const { data: studentMatch } = await supabase
-              .from('students')
+            // 2. Fallback: Cari di tabel profiles
+            const { data: profileMatch } = await supabase
+              .from('profiles')
               .select('email')
-              .eq('nis', targetEmail)
+              .or(`nis.eq.${targetEmail},nip.eq.${targetEmail}`)
               .limit(1)
               .maybeSingle();
 
-            if (studentMatch?.email) {
-              targetEmail = studentMatch.email;
+            if (profileMatch?.email) {
+              targetEmail = profileMatch.email;
             } else {
-              // Cari di tabel teachers
-              const { data: teacherMatch } = await supabase
-                .from('teachers')
+              // 3. Fallback: Cari di tabel students jika belum ada di profiles
+              const { data: studentMatch } = await supabase
+                .from('students')
                 .select('email')
-                .eq('nip', targetEmail)
+                .eq('nis', targetEmail)
                 .limit(1)
                 .maybeSingle();
 
-              if (teacherMatch?.email) {
-                targetEmail = teacherMatch.email;
+              if (studentMatch?.email) {
+                targetEmail = studentMatch.email;
+              } else {
+                // 4. Fallback: Cari di tabel teachers
+                const { data: teacherMatch } = await supabase
+                  .from('teachers')
+                  .select('email')
+                  .eq('nip', targetEmail)
+                  .limit(1)
+                  .maybeSingle();
+
+                if (teacherMatch?.email) {
+                  targetEmail = teacherMatch.email;
+                }
               }
             }
           }

@@ -42,6 +42,14 @@ export const ENTITY_COLUMNS: Record<
     { key: 'status', label: 'Status', required: false, description: 'active / inactive (default: active)' },
     { key: 'initial_password', label: 'Password_Awal', required: false, description: 'Password login guru (opsional, min 6 karakter)' },
   ],
+  admin: [
+    { key: 'full_name', label: 'Nama_Lengkap', required: true, description: 'Nama lengkap Administrator / Operator' },
+    { key: 'email', label: 'Email', required: true, description: 'Email unik admin untuk login CBT (contoh: admin2@smkn1songgom.sch.id)' },
+    { key: 'phone_number', label: 'No_Telepon', required: false, description: 'Nomor WhatsApp / telepon aktif' },
+    { key: 'nip', label: 'NIP_ID', required: false, description: 'NIP atau NIK/ID Admin (opsional)' },
+    { key: 'status', label: 'Status', required: false, description: 'active / inactive (default: active)' },
+    { key: 'initial_password', label: 'Password_Awal', required: false, description: 'Password login admin (opsional, min 6 karakter, default: Admin123!)' },
+  ],
   mapel: [
     { key: 'code', label: 'Kode_Mapel', required: true, description: 'Kode unik mapel (contoh: MTK-SMK, KJ-TJKT)' },
     { key: 'name', label: 'Nama_Mapel', required: true, description: 'Nama lengkap mata pelajaran' },
@@ -438,6 +446,38 @@ export function validateImportRows(
     }
 
     // -------------------------------------------------------------
+    // VALIDASI: ADMIN / OPERATOR
+    // -------------------------------------------------------------
+    else if (entityType === 'admin') {
+      const fullName = mapped.full_name;
+      const email = mapped.email;
+      const initialPassword = mapped.initial_password;
+
+      // Nama Lengkap
+      if (!fullName) {
+        errors.push({ row: excelRowNum, column: 'Nama_Lengkap', value: fullName, message: 'Nama lengkap admin wajib diisi.' });
+      }
+
+      // Email
+      if (!email) {
+        errors.push({ row: excelRowNum, column: 'Email', value: email, message: 'Email admin tidak boleh kosong.' });
+      } else if (!EMAIL_REGEX.test(email)) {
+        errors.push({ row: excelRowNum, column: 'Email', value: email, message: `Format email '${email}' tidak valid.` });
+      } else {
+        if (seenEmails.has(email.toLowerCase())) {
+          errors.push({ row: excelRowNum, column: 'Email', value: email, message: `Email '${email}' duplikat dalam berkas Excel.` });
+        } else {
+          seenEmails.add(email.toLowerCase());
+        }
+      }
+
+      // Password awal jika diisi
+      if (initialPassword && initialPassword.length < 6) {
+        errors.push({ row: excelRowNum, column: 'Password_Awal', value: initialPassword, message: 'Kata sandi minimal 6 karakter.' });
+      }
+    }
+
+    // -------------------------------------------------------------
     // VALIDASI: MATA PELAJARAN
     // -------------------------------------------------------------
     else if (entityType === 'mapel') {
@@ -778,6 +818,18 @@ export function transformRowToDomainEntity(
     };
   }
 
+  if (entityType === 'admin') {
+    return {
+      nip: data.nip || '',
+      full_name: data.full_name,
+      email: data.email,
+      phone_number: data.phone_number || '',
+      role: 'admin',
+      status: (data.status?.toLowerCase() === 'inactive' ? 'inactive' : 'active') as 'active' | 'inactive',
+      initialPassword: data.initial_password || undefined,
+    };
+  }
+
   if (entityType === 'mapel') {
     const major = context.majors.find((m) => m.code.toLowerCase() === data.major_code?.toLowerCase());
     return {
@@ -981,6 +1033,25 @@ export function downloadTemplateExcel(entityType: ImportEntityType): void {
         Kode_Mata_Pelajaran: 'BINDO-SMK',
         Status: 'active',
         Password_Awal: 'GuruSMK2026',
+      },
+    ];
+  } else if (entityType === 'admin') {
+    sampleRows = [
+      {
+        Nama_Lengkap: 'Administrator CBT Utama',
+        Email: 'admin.cbt@smkn1songgom.sch.id',
+        No_Telepon: '081234567890',
+        NIP_ID: 'ADM-001',
+        Status: 'active',
+        Password_Awal: 'Admin123!',
+      },
+      {
+        Nama_Lengkap: 'Operator Ujian SMKN 1 Songgom',
+        Email: 'operator.ujian@smkn1songgom.sch.id',
+        No_Telepon: '081298765432',
+        NIP_ID: 'OPR-002',
+        Status: 'active',
+        Password_Awal: 'Admin123!',
       },
     ];
   } else if (entityType === 'mapel') {
@@ -1261,6 +1332,17 @@ export function exportEntityToExcel(
         Status: item.status === 'active' ? 'Aktif' : 'Nonaktif',
       };
     });
+  } else if (entityType === 'admin') {
+    sheetName = 'Data_Admin';
+    formattedData = items.map((item, idx) => ({
+      No: idx + 1,
+      Nama_Lengkap: item.full_name,
+      Email: item.email,
+      NIP_ID: item.nip || '-',
+      No_Telepon: item.phone_number || '-',
+      Role: 'Admin / Operator',
+      Status: item.status === 'active' ? 'Aktif' : 'Nonaktif',
+    }));
   } else if (entityType === 'mapel') {
     sheetName = 'Data_Mapel';
     formattedData = items.map((item, idx) => ({

@@ -426,7 +426,7 @@ export interface ExamFilterParams {
 // ==========================================
 // FASE 8: IMPORT & EXPORT EXCEL TYPES
 // ==========================================
-export type ImportEntityType = 'siswa' | 'guru' | 'mapel' | 'kelas' | 'jurusan' | 'bank_soal';
+export type ImportEntityType = 'siswa' | 'guru' | 'admin' | 'mapel' | 'kelas' | 'jurusan' | 'bank_soal';
 
 export interface ImportValidationError {
   row: number; // 1-indexed row in Excel

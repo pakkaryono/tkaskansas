@@ -17,6 +17,9 @@ import {
   Info,
   Layers,
   ArrowRight,
+  KeyRound,
+  RefreshCw,
+  AlertTriangle,
 } from 'lucide-react';
 import { useMasterData } from '../../contexts/MasterDataContext';
 import { useQuestionBank } from '../../contexts/QuestionBankContext';
@@ -42,10 +45,49 @@ export const ImportExportAdminPage: React.FC<ImportExportAdminPageProps> = ({ on
   const [selectedEntityForImport, setSelectedEntityForImport] = useState<ImportEntityType | null>(null);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<{
+    type: 'success' | 'error' | 'info';
+    message: string;
+    details?: string;
+  } | null>(null);
 
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 4000);
+  };
+
+  const handleSyncAllAccounts = async () => {
+    setIsSyncing(true);
+    setSyncStatus({
+      type: 'info',
+      message: 'Sedang menyinkronkan seluruh akun siswa, guru, dan admin ke Supabase Auth...',
+    });
+
+    try {
+      const res = await masterData.syncAllLoginAccounts();
+      if (res.success) {
+        setSyncStatus({
+          type: 'success',
+          message: `Berhasil! Total ${res.total_fixed} akun login telah diperbarui & aktif untuk login.`,
+          details: `Rincian: ${res.students_synced} Siswa, ${res.teachers_synced} Guru, dan ${res.profiles_synced} Profil Sinkron.`,
+        });
+        triggerToast('Sinkronisasi akun login Supabase Auth berhasil');
+      } else {
+        setSyncStatus({
+          type: 'error',
+          message: res.message,
+          details: 'Jalankan file script add_admin_user_functions.sql di Supabase SQL Editor untuk mengaktifkan fungsi sinkronisasi otomatis.',
+        });
+      }
+    } catch (e: any) {
+      setSyncStatus({
+        type: 'error',
+        message: `Gagal sinkronisasi: ${e.message}`,
+      });
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const entitiesConfig: Array<{
@@ -80,6 +122,17 @@ export const ImportExportAdminPage: React.FC<ImportExportAdminPageProps> = ({ on
       bgColor: 'bg-emerald-50',
       borderColor: 'border-emerald-200',
       path: '/admin/guru',
+    },
+    {
+      type: 'admin',
+      title: 'Data Administrator',
+      description: 'Import & Export akun administrator/operator sekolah, NIP, email, dan hak akses login.',
+      icon: ShieldCheck,
+      count: 1,
+      color: 'text-teal-600',
+      bgColor: 'bg-teal-50',
+      borderColor: 'border-teal-200',
+      path: '/admin',
     },
     {
       type: 'mapel',
@@ -136,6 +189,17 @@ export const ImportExportAdminPage: React.FC<ImportExportAdminPageProps> = ({ on
         });
       } else if (type === 'guru') {
         exportEntityToExcel('guru', masterData.teachers);
+      } else if (type === 'admin') {
+        exportEntityToExcel('admin', [
+          {
+            nip: '197505101999031001',
+            full_name: 'Administrator CBT Utama',
+            email: 'admin.cbt@smkn1songgom.sch.id',
+            phone_number: '081234567890',
+            password: 'AdminSuper123!',
+            status: 'active',
+          },
+        ]);
       } else if (type === 'mapel') {
         exportEntityToExcel('mapel', masterData.subjects, {
           majors: masterData.majors,
@@ -242,6 +306,57 @@ export const ImportExportAdminPage: React.FC<ImportExportAdminPageProps> = ({ on
       {/* TAB 1: HUB */}
       {activeTab === 'hub' && (
         <div className="space-y-6">
+          {/* Supabase Auth Auto-Fix & Synchronize Banner */}
+          <div className="bg-white rounded-2xl border border-blue-200/90 shadow-xs p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex items-start gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+                <KeyRound className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-slate-900">Sinkronisasi Akun Login Supabase Auth</h3>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                    Siswa, Guru & Admin
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 mt-1 max-w-2xl leading-relaxed">
+                  Jika data hasil upload Excel atau penambahan sebelumnya sudah tersimpan di database namun belum bisa digunakan untuk login, jalankan sinkronisasi ini untuk mendaftarkan akun ke sistem autentikasi Supabase beserta kata sandi default (Siswa: <em>Siswa123!</em>, Guru: <em>Guru123!</em>, Admin: <em>Admin123!</em>).
+                </p>
+                {syncStatus && (
+                  <div className={`mt-2.5 p-2.5 rounded-xl text-xs flex items-start gap-2 ${
+                    syncStatus.type === 'success'
+                      ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                      : syncStatus.type === 'error'
+                      ? 'bg-rose-50 text-rose-800 border border-rose-200'
+                      : 'bg-blue-50 text-blue-800 border border-blue-200'
+                  }`}>
+                    {syncStatus.type === 'success' ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    ) : syncStatus.type === 'error' ? (
+                      <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    ) : (
+                      <RefreshCw className="w-4 h-4 text-blue-600 animate-spin shrink-0 mt-0.5" />
+                    )}
+                    <div>
+                      <div className="font-semibold">{syncStatus.message}</div>
+                      {syncStatus.details && <div className="text-[11px] opacity-90 mt-0.5">{syncStatus.details}</div>}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleSyncAllAccounts}
+              disabled={isSyncing}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold shadow-xs transition-colors shrink-0 cursor-pointer"
+            >
+              <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+              <span>{isSyncing ? 'Menyinkronkan...' : 'Sinkronkan Akun Login'}</span>
+            </button>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {entitiesConfig.map((item) => {
               const Icon = item.icon;
@@ -349,7 +464,7 @@ export const ImportExportAdminPage: React.FC<ImportExportAdminPageProps> = ({ on
             </p>
 
             <div className="space-y-4">
-              {(['siswa', 'guru', 'mapel', 'kelas', 'jurusan', 'bank_soal'] as ImportEntityType[]).map((type) => {
+              {(['siswa', 'guru', 'admin', 'mapel', 'kelas', 'jurusan', 'bank_soal'] as ImportEntityType[]).map((type) => {
                 const cols = getTemplateColumns(type);
                 return (
                   <div

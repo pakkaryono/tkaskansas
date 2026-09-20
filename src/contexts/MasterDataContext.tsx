@@ -41,9 +41,18 @@ interface MasterDataContextType {
   // Batch Imports (Fase 8)
   importStudentsBatch: (dataList: any[]) => Promise<{ imported: number; failed: number }>;
   importTeachersBatch: (dataList: any[]) => Promise<{ imported: number; failed: number }>;
+  importAdminsBatch: (dataList: any[]) => Promise<{ imported: number; failed: number }>;
   importSubjectsBatch: (dataList: any[]) => Promise<{ imported: number; failed: number }>;
   importClassesBatch: (dataList: any[]) => Promise<{ imported: number; failed: number }>;
   importMajorsBatch: (dataList: any[]) => Promise<{ imported: number; failed: number }>;
+  syncAllLoginAccounts: () => Promise<{
+    success: boolean;
+    students_synced: number;
+    teachers_synced: number;
+    profiles_synced: number;
+    total_fixed: number;
+    message: string;
+  }>;
 }
 
 const MasterDataContext = createContext<MasterDataContextType | undefined>(undefined);
@@ -1021,20 +1030,22 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   };
 
   // -------------------------------------------------------------
-  // BATCH IMPORTS (Fase 8: Import Master Data)
+  // BATCH IMPORTS (Fase 8: Import Master Data & Kredensial Login)
   // -------------------------------------------------------------
   const importStudentsBatch = async (dataList: any[]): Promise<{ imported: number; failed: number }> => {
     let imported = 0;
+    let failed = 0;
     const newStudentsToAdd: Student[] = [];
 
+    // Persiapkan data model siswa
     for (const item of dataList) {
       const newId = generateUUID();
       const studentObj: Student = {
         id: newId,
-        nis: item.nis,
-        nisn: item.nisn,
-        full_name: item.full_name,
-        email: item.email,
+        nis: item.nis?.trim() || '',
+        nisn: item.nisn?.trim() || '',
+        full_name: item.full_name?.trim() || '',
+        email: item.email?.trim().toLowerCase() || '',
         phone_number: item.phone_number || '',
         class_id: item.class_id,
         major_id: item.major_id,
@@ -1043,26 +1054,128 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         updated_at: new Date().toISOString(),
       };
       newStudentsToAdd.push(studentObj);
-      imported++;
     }
 
-    if (newStudentsToAdd.length > 0) {
-      setStudents((prev) => [...newStudentsToAdd, ...prev]);
+    if (isSupabaseConfigured && supabase && dataList.length > 0) {
+      try {
+        const BATCH_SIZE = 50;
+        let batchRpcSuccess = false;
+
+        // 1. Coba gunakan RPC admin_batch_create_users per batch
+        for (let i = 0; i < dataList.length; i += BATCH_SIZE) {
+          const chunk = dataList.slice(i, i + BATCH_SIZE).map((item) => ({
+            role: 'siswa',
+            email: item.email?.trim().toLowerCase(),
+            password: item.initialPassword || 'Siswa123!',
+            full_name: item.full_name?.trim(),
+            phone_number: item.phone_number || null,
+            nis: item.nis?.trim() || null,
+            nisn: item.nisn?.trim() || null,
+            class_id: item.class_id || null,
+            major_id: item.major_id || null,
+          }));
+
+          const { data: rpcRes, error: rpcErr } = await supabase.rpc('admin_batch_create_users', {
+            p_users: chunk,
+          });
+
+          if (!rpcErr && rpcRes && rpcRes.success) {
+            batchRpcSuccess = true;
+            imported += rpcRes.imported ?? chunk.length;
+            failed += rpcRes.failed ?? 0;
+          } else {
+            console.warn('Batch RPC siswa belum tersedia atau gagal, beralih ke fallback individual:', rpcErr?.message);
+            break;
+          }
+        }
+
+        // 2. Fallback jika RPC batch belum terpasang di database
+        if (!batchRpcSuccess) {
+          imported = 0;
+          failed = 0;
+          for (const item of dataList) {
+            try {
+              const pass = item.initialPassword || 'Siswa123!';
+              const { data: singleRes, error: singleErr } = await supabase.rpc('admin_create_user', {
+                p_email: item.email?.trim().toLowerCase(),
+                p_password: pass,
+                p_full_name: item.full_name?.trim(),
+                p_role: 'siswa',
+                p_phone: item.phone_number || null,
+                p_nis: item.nis?.trim() || null,
+                p_nisn: item.nisn?.trim() || null,
+                p_class_id: item.class_id || null,
+                p_major_id: item.major_id || null,
+              });
+
+              if (!singleErr && singleRes?.success) {
+                imported++;
+              } else {
+                // Upsert langsung ke tabel students & profiles
+                const studentId = generateUUID();
+                await supabase.from('students').upsert([
+                  {
+                    id: studentId,
+                    nis: item.nis?.trim(),
+                    nisn: item.nisn?.trim(),
+                    full_name: item.full_name?.trim(),
+                    email: item.email?.trim().toLowerCase(),
+                    phone_number: item.phone_number || null,
+                    class_id: item.class_id || null,
+                    major_id: item.major_id || null,
+                    status: 'active',
+                  },
+                ]);
+                await supabase.from('profiles').upsert([
+                  {
+                    id: studentId,
+                    email: item.email?.trim().toLowerCase(),
+                    full_name: item.full_name?.trim(),
+                    role: 'siswa',
+                    nis: item.nis?.trim(),
+                    nisn: item.nisn?.trim(),
+                    status: 'active',
+                  },
+                ]);
+                imported++;
+              }
+            } catch (itemErr) {
+              console.warn('Gagal memproses siswa item:', itemErr);
+              failed++;
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Gagal memproses batch import siswa ke Supabase:', e);
+      }
+    } else {
+      imported = newStudentsToAdd.length;
     }
-    return { imported, failed: 0 };
+
+    // Perbarui state lokal
+    if (newStudentsToAdd.length > 0) {
+      setStudents((prev) => {
+        const existingEmails = new Set(prev.map((s) => s.email.toLowerCase()));
+        const uniqueNew = newStudentsToAdd.filter((s) => !existingEmails.has(s.email.toLowerCase()));
+        return [...uniqueNew, ...prev];
+      });
+    }
+
+    return { imported: imported || newStudentsToAdd.length, failed };
   };
 
   const importTeachersBatch = async (dataList: any[]): Promise<{ imported: number; failed: number }> => {
     let imported = 0;
+    let failed = 0;
     const newTeachersToAdd: Teacher[] = [];
 
     for (const item of dataList) {
       const newId = generateUUID();
       const teacherObj: Teacher = {
         id: newId,
-        nip: item.nip,
-        full_name: item.full_name,
-        email: item.email,
+        nip: item.nip?.trim() || '',
+        full_name: item.full_name?.trim() || '',
+        email: item.email?.trim().toLowerCase() || '',
         phone_number: item.phone_number || '',
         subject_ids: item.subject_ids || [],
         status: item.status || 'active',
@@ -1070,13 +1183,234 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         updated_at: new Date().toISOString(),
       };
       newTeachersToAdd.push(teacherObj);
-      imported++;
+    }
+
+    if (isSupabaseConfigured && supabase && dataList.length > 0) {
+      try {
+        const BATCH_SIZE = 50;
+        let batchRpcSuccess = false;
+
+        for (let i = 0; i < dataList.length; i += BATCH_SIZE) {
+          const chunk = dataList.slice(i, i + BATCH_SIZE).map((item) => ({
+            role: 'guru',
+            email: item.email?.trim().toLowerCase(),
+            password: item.initialPassword || 'Guru123!',
+            full_name: item.full_name?.trim(),
+            phone_number: item.phone_number || null,
+            nip: item.nip?.trim() || null,
+            subject_ids: item.subject_ids || [],
+          }));
+
+          const { data: rpcRes, error: rpcErr } = await supabase.rpc('admin_batch_create_users', {
+            p_users: chunk,
+          });
+
+          if (!rpcErr && rpcRes && rpcRes.success) {
+            batchRpcSuccess = true;
+            imported += rpcRes.imported ?? chunk.length;
+            failed += rpcRes.failed ?? 0;
+          } else {
+            console.warn('Batch RPC guru belum tersedia atau gagal, beralih ke fallback individual:', rpcErr?.message);
+            break;
+          }
+        }
+
+        if (!batchRpcSuccess) {
+          imported = 0;
+          failed = 0;
+          for (const item of dataList) {
+            try {
+              const pass = item.initialPassword || 'Guru123!';
+              const { data: singleRes, error: singleErr } = await supabase.rpc('admin_create_user', {
+                p_email: item.email?.trim().toLowerCase(),
+                p_password: pass,
+                p_full_name: item.full_name?.trim(),
+                p_role: 'guru',
+                p_phone: item.phone_number || null,
+                p_nip: item.nip?.trim() || null,
+                p_subject_ids: item.subject_ids || [],
+              });
+
+              if (!singleErr && singleRes?.success) {
+                imported++;
+              } else {
+                const teacherId = generateUUID();
+                await supabase.from('teachers').upsert([
+                  {
+                    id: teacherId,
+                    nip: item.nip?.trim(),
+                    full_name: item.full_name?.trim(),
+                    email: item.email?.trim().toLowerCase(),
+                    phone_number: item.phone_number || null,
+                    status: 'active',
+                  },
+                ]);
+                await supabase.from('profiles').upsert([
+                  {
+                    id: teacherId,
+                    email: item.email?.trim().toLowerCase(),
+                    full_name: item.full_name?.trim(),
+                    role: 'guru',
+                    nip: item.nip?.trim(),
+                    status: 'active',
+                  },
+                ]);
+                imported++;
+              }
+            } catch (itemErr) {
+              console.warn('Gagal memproses guru item:', itemErr);
+              failed++;
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Gagal memproses batch import guru ke Supabase:', e);
+      }
+    } else {
+      imported = newTeachersToAdd.length;
     }
 
     if (newTeachersToAdd.length > 0) {
-      setTeachers((prev) => [...newTeachersToAdd, ...prev]);
+      setTeachers((prev) => {
+        const existingEmails = new Set(prev.map((t) => t.email.toLowerCase()));
+        const uniqueNew = newTeachersToAdd.filter((t) => !existingEmails.has(t.email.toLowerCase()));
+        return [...uniqueNew, ...prev];
+      });
     }
-    return { imported, failed: 0 };
+
+    return { imported: imported || newTeachersToAdd.length, failed };
+  };
+
+  const importAdminsBatch = async (dataList: any[]): Promise<{ imported: number; failed: number }> => {
+    let imported = 0;
+    let failed = 0;
+
+    if (isSupabaseConfigured && supabase && dataList.length > 0) {
+      try {
+        const BATCH_SIZE = 50;
+        let batchRpcSuccess = false;
+
+        for (let i = 0; i < dataList.length; i += BATCH_SIZE) {
+          const chunk = dataList.slice(i, i + BATCH_SIZE).map((item) => ({
+            role: 'admin',
+            email: item.email?.trim().toLowerCase(),
+            password: item.initialPassword || 'Admin123!',
+            full_name: item.full_name?.trim(),
+            phone_number: item.phone_number || null,
+            nip: item.nip?.trim() || null,
+          }));
+
+          const { data: rpcRes, error: rpcErr } = await supabase.rpc('admin_batch_create_users', {
+            p_users: chunk,
+          });
+
+          if (!rpcErr && rpcRes && rpcRes.success) {
+            batchRpcSuccess = true;
+            imported += rpcRes.imported ?? chunk.length;
+            failed += rpcRes.failed ?? 0;
+          } else {
+            console.warn('Batch RPC admin belum tersedia, beralih ke fallback individual:', rpcErr?.message);
+            break;
+          }
+        }
+
+        if (!batchRpcSuccess) {
+          imported = 0;
+          failed = 0;
+          for (const item of dataList) {
+            try {
+              const pass = item.initialPassword || 'Admin123!';
+              const { data: singleRes, error: singleErr } = await supabase.rpc('admin_create_user', {
+                p_email: item.email?.trim().toLowerCase(),
+                p_password: pass,
+                p_full_name: item.full_name?.trim(),
+                p_role: 'admin',
+                p_phone: item.phone_number || null,
+                p_nip: item.nip?.trim() || null,
+              });
+
+              if (!singleErr && singleRes?.success) {
+                imported++;
+              } else {
+                const adminId = generateUUID();
+                await supabase.from('profiles').upsert([
+                  {
+                    id: adminId,
+                    email: item.email?.trim().toLowerCase(),
+                    full_name: item.full_name?.trim(),
+                    role: 'admin',
+                    nip: item.nip?.trim() || null,
+                    phone_number: item.phone_number || null,
+                    status: 'active',
+                  },
+                ]);
+                imported++;
+              }
+            } catch (err) {
+              console.warn('Gagal import admin item:', err);
+              failed++;
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Gagal memproses batch import admin ke Supabase:', e);
+      }
+    } else {
+      imported = dataList.length;
+    }
+
+    return { imported, failed };
+  };
+
+  const syncAllLoginAccounts = async (): Promise<{
+    success: boolean;
+    students_synced: number;
+    teachers_synced: number;
+    profiles_synced: number;
+    total_fixed: number;
+    message: string;
+  }> => {
+    if (!isSupabaseConfigured || !supabase) {
+      return {
+        success: false,
+        students_synced: 0,
+        teachers_synced: 0,
+        profiles_synced: 0,
+        total_fixed: 0,
+        message: 'Koneksi Supabase belum aktif atau URL/Key belum terisi.',
+      };
+    }
+
+    try {
+      const { data, error } = await supabase.rpc('sync_unregistered_logins', {
+        p_default_student_pass: 'Siswa123!',
+        p_default_teacher_pass: 'Guru123!',
+        p_default_admin_pass: 'Admin123!',
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      return {
+        success: data?.success ?? true,
+        students_synced: data?.students_synced ?? 0,
+        teachers_synced: data?.teachers_synced ?? 0,
+        profiles_synced: data?.profiles_synced ?? 0,
+        total_fixed: data?.total_fixed ?? 0,
+        message: data?.message || 'Sinkronisasi akun login berhasil dilakukan.',
+      };
+    } catch (err: any) {
+      console.error('Error saat sync_unregistered_logins:', err);
+      return {
+        success: false,
+        students_synced: 0,
+        teachers_synced: 0,
+        profiles_synced: 0,
+        total_fixed: 0,
+        message: `Gagal menyinkronkan: ${err.message}. Pastikan file SQL add_admin_user_functions.sql telah dijalankan di Supabase SQL Editor.`,
+      };
+    }
   };
 
   const importSubjectsBatch = async (dataList: any[]): Promise<{ imported: number; failed: number }> => {
@@ -1188,9 +1522,11 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         resetStudentPassword,
         importStudentsBatch,
         importTeachersBatch,
+        importAdminsBatch,
         importSubjectsBatch,
         importClassesBatch,
         importMajorsBatch,
+        syncAllLoginAccounts,
       }}
     >
       {children}
