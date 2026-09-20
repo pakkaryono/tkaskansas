@@ -668,10 +668,10 @@ ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, status = EXCLUDED
 -- 23.7 GRADE CATEGORY CONFIGS
 INSERT INTO public.grade_category_configs (id, min_score, max_score, code, label, badge_class, color, order_num, description)
 VALUES
-    ('gc111111-1111-1111-1111-111111111111', 90.00, 100.00, 'A', 'Sangat Baik', 'bg-emerald-100 text-emerald-800 border-emerald-300', '#059669', 1, 'Menguasai seluruh kompetensi kejuruan dengan predikat istimewa.'),
-    ('gc222222-2222-2222-2222-222222222222', 80.00, 89.99, 'B', 'Baik', 'bg-blue-100 text-blue-800 border-blue-300', '#2563eb', 2, 'Menguasai kompetensi kejuruan dengan tuntas.'),
-    ('gc333333-3333-3333-3333-333333333333', 70.00, 79.99, 'C', 'Cukup', 'bg-amber-100 text-amber-800 border-amber-300', '#d97706', 3, 'Memenuhi standar minimal KKM dengan pendampingan.'),
-    ('gc444444-4444-4444-4444-444444444444', 0.00, 69.99, 'D', 'Perlu Bimbingan', 'bg-rose-100 text-rose-800 border-rose-300', '#e11d48', 4, 'Belum tuntas, wajib mengikuti program remedial.')
+    ('ca111111-1111-1111-1111-111111111111', 90.00, 100.00, 'A', 'Sangat Baik', 'bg-emerald-100 text-emerald-800 border-emerald-300', '#059669', 1, 'Menguasai seluruh kompetensi kejuruan dengan predikat istimewa.'),
+    ('ca222222-2222-2222-2222-222222222222', 80.00, 89.99, 'B', 'Baik', 'bg-blue-100 text-blue-800 border-blue-300', '#2563eb', 2, 'Menguasai kompetensi kejuruan dengan tuntas.'),
+    ('ca333333-3333-3333-3333-333333333333', 70.00, 79.99, 'C', 'Cukup', 'bg-amber-100 text-amber-800 border-amber-300', '#d97706', 3, 'Memenuhi standar minimal KKM dengan pendampingan.'),
+    ('ca444444-4444-4444-4444-444444444444', 0.00, 69.99, 'D', 'Perlu Bimbingan', 'bg-rose-100 text-rose-800 border-rose-300', '#e11d48', 4, 'Belum tuntas, wajib mengikuti program remedial.')
 ON CONFLICT (id) DO UPDATE SET label = EXCLUDED.label, min_score = EXCLUDED.min_score, max_score = EXCLUDED.max_score;
 
 -- 23.8 QUESTIONS (4 TIPE SOAL TKA)
